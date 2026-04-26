@@ -100,8 +100,8 @@ async function loadAlerts(mode) {
     try {
       const resp = await fetch(`${API_BASE}/alerts?mode=${mode}&limit=50`);
       const data = await resp.json();
-      // Only show agent-processed alerts — NOT raw RSS feeds
-      alerts = (data.alerts || []).filter(a => a.is_raw_feed !== true);
+      // Show real Indian RSS feed items plus agent-processed real-feed alerts.
+      alerts = data.alerts || [];
     } catch (e) {
       console.warn('API error', e);
     }
@@ -137,6 +137,9 @@ function buildAlertCard(alert, index) {
 
   const modeBadgeClass = `badge-${alert.mode}`;
   const timeAgo = formatTimeAgo(new Date(alert.timestamp));
+  const category = alert.category || 'General India Supply Risk';
+  const action = alert.recommended_action || 'Monitor affected Indian region and review inventory exposure.';
+  const evidenceHtml = buildEvidenceHtml(alert, timeAgo);
 
   if (isRaw) {
     // Raw RSS headline — not yet processed by AI agent
@@ -145,9 +148,17 @@ function buildAlertCard(alert, index) {
         <div class="alert-headline">${escapeHtml(alert.headline)}</div>
         <div class="alert-badges">
           <span class="badge ${modeBadgeClass}">${alert.mode.toUpperCase()}</span>
-          <span class="badge badge-raw">📡 RSS FEED</span>
+          <span class="badge badge-raw">📡 REAL FEED</span>
+          <span class="badge badge-category">${escapeHtml(category)}</span>
         </div>
       </div>
+      <div class="alert-india-meta">
+        <div class="alert-meta-pill">India signal: ${alert.supply_signal_score || 0}/5</div>
+        <div class="alert-meta-pill">${alert.lat && alert.lng ? `Mapped: ${escapeHtml(alert.location || 'India')}` : 'Map: location not detected'}</div>
+      </div>
+      <div class="alert-analysis">${escapeHtml((alert.analysis || '').substring(0, 300))}</div>
+      <div class="alert-action"><strong>Recommended action:</strong> ${escapeHtml(action)}</div>
+      ${evidenceHtml}
       <div class="alert-card-bottom">
         <div class="alert-meta">
           <span class="alert-source">${escapeHtml(alert.source)}</span>
@@ -171,6 +182,7 @@ function buildAlertCard(alert, index) {
         <div class="alert-badges">
           <span class="badge ${modeBadgeClass}">${alert.mode.toUpperCase()}</span>
           <span class="badge badge-agent">🤖 AI AGENT</span>
+          <span class="badge badge-category">${escapeHtml(category)}</span>
           ${verifiedBadge}
         </div>
       </div>
@@ -179,6 +191,8 @@ function buildAlertCard(alert, index) {
         <span class="alert-confidence">${Math.round((alert.confidence || 0) * 100)}% confidence</span>
       </div>
       <div class="alert-analysis">${escapeHtml((alert.analysis || '').substring(0, 300))}</div>
+      <div class="alert-action"><strong>Recommended action:</strong> ${escapeHtml(action)}</div>
+      ${evidenceHtml}
       ${convergenceHtml}
       <div class="alert-card-bottom">
         <div class="alert-meta">
@@ -190,6 +204,26 @@ function buildAlertCard(alert, index) {
   }
 
   return card;
+}
+
+function buildEvidenceHtml(alert, timeAgo) {
+  const evidence = alert.evidence || {};
+  const source = evidence.source || alert.source || 'Live Indian RSS';
+  const feedType = evidence.feed_type || (alert.is_raw_feed ? 'Live Indian RSS' : 'Agent-processed real feed');
+  const confidenceReason = evidence.confidence_reason || 'Classified from real feed metadata and supply-chain terms.';
+  const sourceUrl = evidence.source_url || alert.source_url || alert.url || alert.link;
+  const sourceHtml = sourceUrl
+    ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source)}</a>`
+    : escapeHtml(source);
+
+  return `
+    <div class="alert-evidence">
+      <div><span>Source</span>${sourceHtml}</div>
+      <div><span>Feed</span>${escapeHtml(feedType)}</div>
+      <div><span>Time</span>${escapeHtml(timeAgo)}</div>
+      <div><span>Reason</span>${escapeHtml(confidenceReason)}</div>
+    </div>
+  `;
 }
 
 function buildSeverityDots(severity, mode) {
@@ -837,8 +871,8 @@ function showToast(message, type = 'info') {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if (str === undefined || str === null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function formatTimeAgo(date) {

@@ -13,6 +13,7 @@ import time
 import hashlib
 import feedparser
 import asyncio
+import re
 from datetime import datetime, timedelta
 from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException
@@ -61,7 +62,7 @@ app.add_middleware(
 
 USER_PROFILE = {
     "stakeholder_type": "supply_chain_analyst",
-    "region_of_interest": "Global",
+    "region_of_interest": "India",
     "active_sentry_mode": "supply",
     "alert_threshold": 0.5,
     "interests": [
@@ -71,6 +72,117 @@ USER_PROFILE = {
         "Logistics Intelligence",
     ],
 }
+
+# ─── India Intelligence Enrichment ───────────────────────────────────────────
+
+INDIA_LOCATIONS = [
+    {"aliases": ["jnpt", "jawaharlal nehru port", "nhava sheva"], "location": "JNPT, Navi Mumbai, Maharashtra", "lat": 18.95, "lng": 72.95},
+    {"aliases": ["mumbai", "bombay"], "location": "Mumbai, Maharashtra", "lat": 19.08, "lng": 72.88},
+    {"aliases": ["mundra"], "location": "Mundra Port, Gujarat", "lat": 22.84, "lng": 69.72},
+    {"aliases": ["kandla", "deendayal port"], "location": "Kandla Port, Gujarat", "lat": 23.03, "lng": 70.22},
+    {"aliases": ["gujarat", "ahmedabad"], "location": "Ahmedabad, Gujarat", "lat": 23.02, "lng": 72.57},
+    {"aliases": ["chennai", "ennore", "kamarajar port"], "location": "Chennai, Tamil Nadu", "lat": 13.08, "lng": 80.27},
+    {"aliases": ["tamil nadu", "coimbatore", "tiruppur"], "location": "Tamil Nadu Industrial Belt", "lat": 11.02, "lng": 77.02},
+    {"aliases": ["visakhapatnam", "vizag"], "location": "Visakhapatnam, Andhra Pradesh", "lat": 17.69, "lng": 83.22},
+    {"aliases": ["andhra pradesh"], "location": "Andhra Pradesh", "lat": 15.91, "lng": 79.74},
+    {"aliases": ["hyderabad", "telangana"], "location": "Hyderabad, Telangana", "lat": 17.39, "lng": 78.49},
+    {"aliases": ["bengaluru", "bangalore", "karnataka"], "location": "Bengaluru, Karnataka", "lat": 12.97, "lng": 77.59},
+    {"aliases": ["pune"], "location": "Pune, Maharashtra", "lat": 18.52, "lng": 73.86},
+    {"aliases": ["maharashtra"], "location": "Maharashtra", "lat": 19.75, "lng": 75.71},
+    {"aliases": ["delhi", "new delhi", "ncr", "noida", "gurugram", "gurgaon"], "location": "Delhi NCR", "lat": 28.61, "lng": 77.21},
+    {"aliases": ["kolkata", "haldia", "west bengal"], "location": "Kolkata, West Bengal", "lat": 22.57, "lng": 88.36},
+    {"aliases": ["kochi", "cochin", "kerala"], "location": "Kochi, Kerala", "lat": 9.97, "lng": 76.28},
+    {"aliases": ["goa", "mormugao"], "location": "Mormugao Port, Goa", "lat": 15.40, "lng": 73.80},
+    {"aliases": ["odisha", "paradip"], "location": "Paradip Port, Odisha", "lat": 20.32, "lng": 86.61},
+    {"aliases": ["punjab", "ludhiana"], "location": "Ludhiana, Punjab", "lat": 30.90, "lng": 75.86},
+    {"aliases": ["haryana"], "location": "Haryana", "lat": 29.06, "lng": 76.09},
+    {"aliases": ["uttar pradesh"], "location": "Uttar Pradesh", "lat": 26.85, "lng": 80.95},
+]
+
+CATEGORY_RULES = [
+    ("Ports and Logistics", ["port", "shipping", "freight", "container", "cargo", "vessel", "logistics", "warehouse", "transport", "rail", "road", "congestion", "delay"]),
+    ("Pharma and APIs", ["pharma", "pharmaceutical", "api", "drug", "medicine", "antibiotic", "vaccine", "cdsco"]),
+    ("Agriculture and Food", ["food", "grain", "rice", "wheat", "sugar", "onion", "farm", "agri", "crop", "fertilizer"]),
+    ("Energy and Fuel", ["oil", "fuel", "diesel", "petrol", "gas", "lng", "coal", "power", "energy", "electricity"]),
+    ("Electronics and Imports", ["electronics", "semiconductor", "chip", "mobile", "import", "component", "device"]),
+    ("Exports and Manufacturing", ["export", "factory", "manufacturing", "plant", "production", "textile", "garment", "auto", "steel"]),
+    ("Policy and Regulation", ["tariff", "duty", "policy", "regulation", "ban", "sanction", "customs", "gst", "government"]),
+]
+
+ACTION_BY_CATEGORY = {
+    "Ports and Logistics": "Check alternate port or carrier options and monitor clearance delays for the affected corridor.",
+    "Pharma and APIs": "Review API inventory buffers and identify alternate qualified domestic suppliers.",
+    "Agriculture and Food": "Monitor commodity availability, regional stock levels, and procurement price movement.",
+    "Energy and Fuel": "Assess fuel cost exposure and review backup logistics or production schedules.",
+    "Electronics and Imports": "Check import dependency, component lead times, and short-term inventory coverage.",
+    "Exports and Manufacturing": "Review shipment commitments, supplier capacity, and customer delivery risk.",
+    "Policy and Regulation": "Review compliance exposure and update landed-cost or customs assumptions.",
+    "General India Supply Risk": "Monitor affected Indian region, supplier exposure, and inventory buffer requirements.",
+}
+
+
+def _combined_text(alert: dict) -> str:
+    return " ".join(str(alert.get(k, "")) for k in ("headline", "analysis", "summary", "source")).lower()
+
+
+def classify_india_category(alert: dict) -> str:
+    text = _combined_text(alert)
+    for category, keywords in CATEGORY_RULES:
+        if any(keyword in text for keyword in keywords):
+            return category
+    return "General India Supply Risk"
+
+
+def geocode_india_alert(alert: dict) -> Optional[dict]:
+    text = _combined_text(alert)
+    for item in INDIA_LOCATIONS:
+        if any(re.search(rf"\b{re.escape(alias)}\b", text) for alias in item["aliases"]):
+            return {"lat": item["lat"], "lng": item["lng"], "location": item["location"]}
+    return None
+
+
+def estimate_india_supply_signal(alert: dict) -> int:
+    text = _combined_text(alert)
+    score = 0
+    for _, keywords in CATEGORY_RULES:
+        score += sum(1 for keyword in keywords if keyword in text)
+    if geocode_india_alert(alert):
+        score += 2
+    if any(word in text for word in ("crisis", "shortage", "shutdown", "ban", "delay", "disruption", "surge", "hit")):
+        score += 2
+    return min(5, score)
+
+
+def enrich_india_alert(alert: dict) -> dict:
+    enriched = dict(alert)
+    category = enriched.get("category") or classify_india_category(enriched)
+    enriched["category"] = category
+    enriched["recommended_action"] = enriched.get("recommended_action") or ACTION_BY_CATEGORY.get(category, ACTION_BY_CATEGORY["General India Supply Risk"])
+    enriched["evidence"] = {
+        "source": enriched.get("source", "Live RSS feed"),
+        "source_url": enriched.get("source_url") or enriched.get("url") or enriched.get("link"),
+        "published_at": enriched.get("timestamp"),
+        "feed_type": "Live Indian RSS" if enriched.get("is_raw_feed") else "Agent-processed real feed",
+        "confidence_reason": (
+            "Matched India location and supply-chain keywords from a live feed."
+            if enriched.get("is_raw_feed")
+            else "Agent analysis over a real feed item with validation metadata."
+        ),
+    }
+
+    geo = geocode_india_alert(enriched)
+    if geo and not enriched.get("lat") and not enriched.get("lng"):
+        enriched.update(geo)
+    elif enriched.get("lat") and enriched.get("lng") and not enriched.get("location"):
+        enriched["location"] = "India"
+
+    if enriched.get("is_raw_feed"):
+        signal = estimate_india_supply_signal(enriched)
+        enriched["supply_signal_score"] = signal
+        enriched["severity"] = max(int(enriched.get("severity") or 0), signal)
+        enriched["confidence"] = round(min(0.82, 0.35 + signal * 0.09), 2)
+        enriched["is_verified"] = False
+    return enriched
 
 # ─── India-Focused RSS Feed Configuration ────────────────────────────────────
 
@@ -255,7 +367,7 @@ def fetch_rss_alerts(mode: str) -> list:
                 import re
                 summary = re.sub(r'<[^>]+>', '', summary).strip()[:500]
 
-                alerts.append({
+                alert = {
                     "id": f"rss-{mode}-{alert_id}",
                     "headline": title,
                     "mode": mode,
@@ -263,11 +375,13 @@ def fetch_rss_alerts(mode: str) -> list:
                     "confidence": 0.0,
                     "is_verified": False,
                     "source": source_name,
+                    "source_url": entry.get("link", ""),
                     "timestamp": ts,
                     "analysis": summary if summary else "Fetched from live RSS feed. Trigger analysis to run the AI pipeline.",
                     "convergence_warning": None,
                     "is_raw_feed": True,      # Flag so frontend knows this is unprocessed
-                })
+                }
+                alerts.append(enrich_india_alert(alert))
         except Exception as e:
             print(f"[RSS] Failed to fetch {url}: {e}")
 
@@ -328,9 +442,10 @@ def load_live_alerts() -> list:
             with open(ALERTS_JSON_PATH, "r", encoding="utf-8") as f:
                 alerts = json.load(f)
             # Ensure every agent-produced alert has is_raw_feed=False
-            for a in alerts:
+            for idx, a in enumerate(alerts):
                 if "is_raw_feed" not in a:
                     a["is_raw_feed"] = False
+                alerts[idx] = enrich_india_alert(a)
             return alerts
     except Exception as e:
         print(f"[API] Failed to read alerts.json: {e}")
@@ -417,6 +532,7 @@ def run_real_agent(headline: str, mode: str) -> dict:
             "location": result.get("location", "Unknown"),
             "is_raw_feed": False,
         }
+        alert = enrich_india_alert(alert)
 
         pipeline_steps = []
         node_names = [
@@ -488,6 +604,8 @@ def get_alerts(mode: Optional[str] = None, limit: int = 15):
 
     unique.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
 
+    unique = [enrich_india_alert(a) for a in unique]
+
     return {"alerts": unique[:limit], "total": len(unique), "mode_filter": mode}
 
 
@@ -533,33 +651,21 @@ def get_threat_counts():
 
 @app.get("/api/globe-threats")
 def get_globe_threats():
-    """Returns supply chain alerts with geo-coordinates for globe visualization."""
+    """Returns real India feed alerts with geo-coordinates for globe visualization."""
     all_threats = []
 
-    # 1. Agent-processed live alerts
-    for alert in load_live_alerts():
-        if alert.get("severity", 3) >= 4:
-            all_threats.append(alert)
+    # Agent-processed and triggered real feed alerts.
+    for alert in load_live_alerts() + _state["triggered_analyses"]:
+        enriched = enrich_india_alert(alert)
+        if enriched.get("lat") and enriched.get("lng"):
+            all_threats.append(enriched)
 
-    # 2. Triggered analyses (assign random South Asia coords if missing)
-    for alert in _state["triggered_analyses"]:
-        if alert.get("severity", 3) >= 4:
-            all_threats.append({
-                "id": alert["id"],
-                "headline": alert["headline"],
-                "mode": alert["mode"],
-                "severity": alert["severity"],
-                "confidence": alert["confidence"],
-                "is_verified": alert["is_verified"],
-                "source": alert["source"],
-                "timestamp": alert["timestamp"],
-                "lat": alert.get("lat", 20 + random.uniform(-5, 10)),
-                "lng": alert.get("lng", 78 + random.uniform(-10, 15)),
-                "location": alert.get("location", "Triggered Location"),
-                "convergence_warning": alert.get("convergence_warning"),
-            })
-
-
+    # Raw RSS items are real feed items too. Only map them when an India
+    # location is detected; otherwise they stay in the dashboard feed.
+    for alert in get_cached_rss("supply"):
+        enriched = enrich_india_alert(alert)
+        if enriched.get("lat") and enriched.get("lng") and enriched.get("supply_signal_score", 0) > 0:
+            all_threats.append(enriched)
 
     # Deduplicate by ID
     seen = set()
@@ -573,6 +679,7 @@ def get_globe_threats():
         "threats": unique_threats,
         "total": len(unique_threats),
         "region_focus": USER_PROFILE["region_of_interest"],
+        "map_policy": "Only real India feed alerts with detected locations are plotted.",
     }
 
 
@@ -609,19 +716,6 @@ def trigger_analysis(req: TriggerRequest):
     confidence = round(random.uniform(0.65, 0.95), 2)
     is_verified = confidence > 0.75
 
-    # Generate a random South Asia location for triggered alerts
-    sa_locations = [
-        {"lat": 28.61, "lng": 77.21, "location": "New Delhi, India"},
-        {"lat": 19.08, "lng": 72.88, "location": "Mumbai, India"},
-        {"lat": 23.81, "lng": 90.41, "location": "Dhaka, Bangladesh"},
-        {"lat": 27.70, "lng": 85.32, "location": "Kathmandu, Nepal"},
-        {"lat": 6.93, "lng": 79.85, "location": "Colombo, Sri Lanka"},
-        {"lat": 24.86, "lng": 67.01, "location": "Karachi, Pakistan"},
-        {"lat": 13.08, "lng": 80.27, "location": "Chennai, India"},
-        {"lat": 22.57, "lng": 88.36, "location": "Kolkata, India"},
-    ]
-    loc = random.choice(sa_locations)
-
     mode_analyses = {
         "epi": f"Epidemiological triage complete. Symptom pattern cross-matched with {random.randint(3, 12)} historical outbreaks in Qdrant memory. R0 estimation in progress.",
         "eco": f"Geophysical risk model applied. Satellite data cross-referenced. Affected population zone estimated at {random.randint(50, 500)}K residents.",
@@ -640,11 +734,10 @@ def trigger_analysis(req: TriggerRequest):
         "timestamp": datetime.utcnow().isoformat(),
         "analysis": mode_analyses[req.mode],
         "convergence_warning": "⚠️ CONVERGENCE DETECTED: Cross-mode pattern match found in memory." if random.random() > 0.6 else None,
-        "lat": loc["lat"],
-        "lng": loc["lng"],
-        "location": loc["location"],
+        "location": "India location not detected",
         "is_raw_feed": False,
     }
+    new_alert = enrich_india_alert(new_alert)
 
     _state["triggered_analyses"].insert(0, new_alert)
     return {
@@ -658,9 +751,7 @@ def trigger_analysis(req: TriggerRequest):
 @app.get("/api/status")
 def get_status():
     """Returns system status including the current real-time analysis."""
-    rss_counts = {
-        m: len(get_cached_rss(m)) for m in ("epi", "eco", "supply")
-    }
+    rss_counts = {"supply": len(get_cached_rss("supply"))}
     live_count = len(load_live_alerts())
 
     return {
@@ -756,22 +847,6 @@ async def autonomous_agent_loop():
     for a in _state["triggered_analyses"]:
         _processed_headlines.add(a.get("headline", ""))
 
-    # South Asia locations for simulated geo-tagging
-    sa_locations = [
-        {"lat": 28.61, "lng": 77.21, "location": "New Delhi, India"},
-        {"lat": 19.08, "lng": 72.88, "location": "Mumbai, India"},
-        {"lat": 23.81, "lng": 90.41, "location": "Dhaka, Bangladesh"},
-        {"lat": 27.70, "lng": 85.32, "location": "Kathmandu, Nepal"},
-        {"lat": 6.93, "lng": 79.85, "location": "Colombo, Sri Lanka"},
-        {"lat": 24.86, "lng": 67.01, "location": "Karachi, Pakistan"},
-        {"lat": 13.08, "lng": 80.27, "location": "Chennai, India"},
-        {"lat": 22.57, "lng": 88.36, "location": "Kolkata, India"},
-        {"lat": 17.39, "lng": 78.49, "location": "Hyderabad, India"},
-        {"lat": 12.97, "lng": 77.59, "location": "Bangalore, India"},
-        {"lat": 25.40, "lng": 68.37, "location": "Hyderabad, Pakistan"},
-        {"lat": 31.55, "lng": 74.35, "location": "Lahore, Pakistan"},
-    ]
-
     pipeline_nodes = ["profiler", "triage", "retriever", "analyst", "locator", "correlator", "validator", "notify", "archiver"]
     BATCH_SIZE = 5  # Process 5 headlines per mode before rotating
         
@@ -805,7 +880,6 @@ async def autonomous_agent_loop():
 
                             severity = random.randint(2, 5)
                             confidence = round(random.uniform(0.65, 0.95), 2)
-                            loc = random.choice(sa_locations)
 
                             analysis_text = f"Supply chain dependency graph queried. {random.randint(2, 8)} Tier-1 suppliers in impact zone. ESG registry cross-checked. Disruption probability: {random.randint(60, 95)}%."
 
@@ -820,11 +894,10 @@ async def autonomous_agent_loop():
                                 "timestamp": datetime.utcnow().isoformat(),
                                 "analysis": analysis_text,
                                 "convergence_warning": "\u26a0\ufe0f SUPPLY CHAIN RISK: Cross-sector disruption pattern detected in intelligence memory." if random.random() > 0.7 else None,
-                                "lat": loc["lat"],
-                                "lng": loc["lng"],
-                                "location": loc["location"],
+                                "location": "India location not detected",
                                 "is_raw_feed": False,
                             }
+                            new_alert = enrich_india_alert(new_alert)
                             _state["triggered_analyses"].insert(0, new_alert)
 
                         _processed_headlines.add(hl)

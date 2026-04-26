@@ -377,7 +377,7 @@
         <span class="logo-text">Supply<span class="accent">Sentry</span></span>
       </a>
       <div class="globe-topbar-divider"></div>
-      <div class="globe-topbar-title">🛰️ Supply Chain Monitor</div>
+      <div class="globe-topbar-title">🛰️ India Supply Chain Monitor</div>
     </div>
     <div class="globe-topbar-right">
       <div class="live-dot-globe"></div>
@@ -406,7 +406,7 @@
 
   <!-- ═══ MODE FILTER BUTTONS ═══ -->
   <div class="globe-filters" id="globe-filters">
-    <button class="globe-filter-btn active" data-mode="all" onclick="filterMode('all')">🌍 All Disruptions</button>
+    <button class="globe-filter-btn active" data-mode="all" onclick="filterMode('all')">🇮🇳 India Alerts</button>
     <button class="globe-filter-btn" data-mode="supply" onclick="filterMode('supply')">♻️ Supply Chain</button>
   </div>
 
@@ -414,7 +414,7 @@
   <div class="globe-bottom-bar" id="globe-bottom-bar">
     <div class="globe-bottom-item">
       <span class="globe-bottom-dot" style="background: #818cf8; box-shadow: 0 0 8px #818cf8;"></span>
-      Monitoring: <strong id="globe-region-name">South Asia</strong>
+      Monitoring: <strong id="globe-region-name">India</strong>
     </div>
     <div class="globe-bottom-divider"></div>
     <div class="globe-bottom-item">
@@ -423,7 +423,7 @@
     <div class="globe-bottom-divider"></div>
     <div class="globe-bottom-item">
       <span class="globe-bottom-dot" style="background: var(--supply);"></span> <span id="bottom-supply">0</span>
-      &nbsp;disruptions
+      &nbsp;geocoded alerts
     </div>
   </div>
 
@@ -481,6 +481,10 @@
           const el = document.getElementById('globe-region-name');
           if (el) el.textContent = data.region_focus;
         }
+        if (data.map_policy) {
+          const stakeholderEl = document.getElementById('globe-stakeholder-text');
+          if (stakeholderEl) stakeholderEl.textContent = 'Real feed only';
+        }
       } catch {
         // preserve old data if fetch fails
       }
@@ -517,6 +521,11 @@
       });
 
       applyFilter();
+    }
+
+    function escapeHtml(str) {
+      if (str === undefined || str === null) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function applyFilter() {
@@ -556,14 +565,21 @@
         ).join('');
 
         const popupContent = `
-          <div class="popup-headline">${d.headline || 'Unknown Threat'}</div>
+          <div class="popup-headline">${escapeHtml(d.headline || 'Unknown Threat')}</div>
           <div class="popup-meta">
-            <span class="popup-badge ${d.mode}">${d.mode.toUpperCase()}</span>
-            <span class="popup-location">📍 ${d.location || 'Unknown'}</span>
+            <span class="popup-badge ${escapeHtml(d.mode)}">${escapeHtml((d.mode || 'supply').toUpperCase())}</span>
+            <span class="popup-badge supply">${escapeHtml(d.category || 'India Supply Risk')}</span>
+            <span class="popup-location">📍 ${escapeHtml(d.location || 'Unknown')}</span>
+          </div>
+          <div style="margin-top:8px;color:#cbd5e1;font-size:0.75rem;line-height:1.45;">
+            ${escapeHtml(d.recommended_action || 'Monitor affected Indian region and review supply exposure.')}
           </div>
           <div style="margin-top:8px; display:flex; align-items:center; gap:3px;">
             ${sevDots}
             <span style="color:#94a3b8; font-size:0.7rem; margin-left:6px;">Severity ${d.severity}/5</span>
+          </div>
+          <div style="margin-top:8px;color:#64748b;font-size:0.68rem;">
+            Source: ${escapeHtml(d.source || 'Live Indian RSS')}
           </div>
         `;
         
