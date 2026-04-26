@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SupplySentry — Supply Chain Intelligence</title>
+  <meta name="description" content="SupplySentry: AI-powered supply chain disruption intelligence platform. Real-time monitoring of trade routes, ESG compliance, and logistics risks. Addressing SDG 12." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       NAVIGATION BAR
+  ═══════════════════════════════════════════ -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-container">
+      <div class="nav-brand">
+        <div class="nav-logo">
+          <span class="logo-icon">🛡️</span>
+          <span class="logo-text">Supply<span class="accent">Sentry</span></span>
+        </div>
+        <div class="nav-tagline">AI-Powered Supply Chain Disruption Intelligence</div>
+      </div>
+
+      <div class="nav-modes">
+        <button class="nav-mode-btn active mode-supply-active" id="nav-btn-supply" data-mode="supply">
+          <span class="mode-icon">♻️</span> Supply-Sentry
+        </button>
+        <a class="nav-mode-btn nav-globe-btn" id="nav-btn-globe" href="/globe.html">
+          <span class="mode-icon">🌐</span> Globe View
+        </a>
+      </div>
+
+      <div class="nav-right">
+        <div class="live-indicator" id="live-indicator">
+          <div class="live-dot"></div>
+          <span>LIVE MONITORING</span>
+        </div>
+        <a href="conveyor.html" class="btn-ghost btn-sm" style="margin-right: 15px; text-decoration: none;">Live Scanner →</a>
+        <button class="btn-primary btn-sm" id="btn-launch-dashboard" onclick="scrollToDashboard()">
+          Launch Dashboard ↓
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════
+       HERO SECTION
+  ═══════════════════════════════════════════ -->
+  <section class="hero" id="hero">
+    <div class="hero-blobs">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+    <div class="hero-grid-bg"></div>
+    <div class="hero-particles" id="hero-particles"></div>
+
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span>🌐 SDG 12 — Responsible Consumption & Production</span>
+      </div>
+      <h1 class="hero-title">
+        Supply Chain<br />
+        <span class="gradient-text-2">Intelligence</span>
+      </h1>
+      <p class="hero-subtitle">
+        SupplySentry is an AI-powered intelligence platform that detects supply chain disruptions,
+        trade route risks, and ESG violations — before they cascade into global crises.
+      </p>
+
+      <div class="hero-ctas">
+        <button class="btn-primary btn-lg" id="btn-hero-dashboard" onclick="scrollToDashboard()">
+          View Live Dashboard
+        </button>
+        <button class="btn-ghost btn-lg" id="btn-hero-learn" onclick="scrollToSection('capabilities')">
+          How It Works ↓
+        </button>
+      </div>
+
+      <div class="hero-stats">
+        <div class="stat-card">
+          <div class="stat-number" id="stat-threats" data-target="847">0</div>
+          <div class="stat-label">Disruptions Tracked</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-countries" data-target="67">0</div>
+          <div class="stat-label">Trade Routes Monitored</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-accuracy" data-target="96">0</div>
+          <div class="stat-label">Accuracy %</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-uptime" data-target="99">0</div>
+          <div class="stat-label">Uptime %</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-scroll-hint">
+      <div class="scroll-arrow"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       CORE CAPABILITIES SECTION (NEW)
+  ═══════════════════════════════════════════ -->
+  <section class="capabilities-section reveal" id="capabilities">
+    <div class="section-header">
+      <div class="section-label">Why It Works</div>
+      <h2 class="section-title">Core Technical Strengths</h2>
+      <p class="section-subtitle">Bridging the gap between raw data streams and actionable intelligence.</p>
+    </div>
+
+    <div class="capabilities-grid">
+      <div class="cap-card">
+        <div class="cap-icon">📡</div>
+        <h3 class="cap-title">Live RSS Ingestion</h3>
+        <p class="cap-desc">Continuous monitoring of industry feeds, trade publications, and logistics data streams for supply chain signals.</p>
+      </div>
+      <div class="cap-card">
+        <div class="cap-icon">🧠</div>
+        <h3 class="cap-title">RAG-Powered Memory</h3>
+        <p class="cap-desc">Historical disruption patterns retrieved from vector databases to prevent duplicate alerts and enhance risk scoring.</p>
+      </div>
+      <div class="cap-card">
+        <div class="cap-icon">🤖</div>
+        <h3 class="cap-title">Autonomous Agents</h3>
+        <p class="cap-desc">Multi-agent LangGraph pipeline autonomously triages, analyzes, and validates supply chain threats 24/7.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       THREE SDG PILLARS
+  ═══════════════════════════════════════════ -->
+  <section class="pillars-section" id="pillars">
+    <div class="section-header">
+      <div class="section-label">Our Mission</div>
+      <h2 class="section-title">Protecting Global Supply Chains</h2>
+      <p class="section-subtitle">AI-powered intelligence targeting UN SDG 12 — ensuring responsible consumption and production through proactive disruption detection.</p>
+    </div>
+
+    <div class="pillars-grid">
+
+      <!-- SUPPLY SENTRY (Featured - Single Pillar) -->
+      <div class="pillar-card pillar-supply pillar-featured" id="card-supply" style="max-width: 600px; margin: 0 auto;">
+        <div class="pillar-glow glow-supply"></div>
+        <div class="pillar-badge-featured" style="background: var(--supply);">ACTIVE</div>
+        <div class="pillar-icon">♻️</div>
+        <div class="pillar-sdg-badge">SDG 12</div>
+        <h3 class="pillar-title">Supply-Sentry</h3>
+        <p class="pillar-desc">
+          Supply chain transparency via ESG reports, trade route monitoring, and whistleblower data. Detects disruptions, violations, and shortages before they cascade.
+        </p>
+        <ul class="pillar-features">
+          <li>✓ ESG report analysis</li>
+          <li>✓ Whistleblower signal processing</li>
+          <li>✓ Trade route risk mapping</li>
+          <li>✓ Tier-2 supplier visibility</li>
+          <li>✓ Port congestion tracking</li>
+          <li>✓ Sanctions & tariff monitoring</li>
+        </ul>
+        <div class="pillar-footer">
+          <div class="pillar-stat"><span class="pillar-stat-num supply-color" id="supply-threat-count">—</span> disruptions detected</div>
+          <div class="pillar-threat-ticker" id="supply-threat-ticker">
+            <div class="threat-ticker-label">⚡ Latest Disruptions</div>
+            <ul class="threat-ticker-list" id="supply-consequences-list"></ul>
+          </div>
+          <button class="btn-pillar btn-pillar-supply" id="btn-explore-supply" onclick="scrollToDashboard()">
+            View Dashboard →
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       GLOBAL THREAT LANDSCAPE (INFOGRAPHICS)
+  ═══════════════════════════════════════════ -->
+  <section class="infographics-section" id="infographics">
+    <div class="section-header">
+      <div class="section-label">Data Visualization</div>
+      <h2 class="section-title">Supply Chain Risk Landscape</h2>
+      <p class="section-subtitle">Live analytics from aggregated supply chain intelligence.</p>
+    </div>
+
+    <div class="infographics-grid" style="grid-template-columns: 1fr;">
+      <div class="infra-card" id="infra-supply" style="max-width: 700px; margin: 0 auto;">
+        <h3 class="infra-title">Supply-Sentry:<br/>Disruption Factors</h3>
+        <div class="chart-container">
+          <canvas id="chartSupply"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       🧠 NEURAL MOAT — Cross-Mode Convergence
+  ═══════════════════════════════════════════ -->
+  <section class="neural-moat-section reveal" id="neural-moat">
+    <div class="section-header">
+      <div class="section-label">🧠 Intelligence Memory</div>
+      <h2 class="section-title">Supply Chain Risk Engine</h2>
+      <p class="section-subtitle">Cross-referencing disruption signals across trade routes, suppliers, and geopolitical events to surface hidden risks.</p>
+    </div>
+
+    <div class="moat-layout">
+
+      <!-- LEFT: Network Graph Visualization -->
+      <div class="moat-graph-card">
+        <h4 class="moat-card-title">🔗 Inter-Sentry Link Map</h4>
+        <div class="moat-network" id="moat-network">
+          <svg viewBox="0 0 400 280" class="moat-svg" id="moat-svg">
+            <!-- Connection lines (drawn dynamically) -->
+            <line id="link-epi-eco" class="moat-link" x1="100" y1="80" x2="300" y2="80" />
+            <line id="link-eco-supply" class="moat-link" x1="300" y1="80" x2="200" y2="230" />
+            <line id="link-epi-supply" class="moat-link" x1="100" y1="80" x2="200" y2="230" />
+
+            <!-- Nodes -->
+            <g class="moat-node" id="moat-node-epi">
+              <circle cx="100" cy="80" r="38" class="node-circle node-epi" />
+              <text x="100" y="75" class="node-emoji">🩺</text>
+              <text x="100" y="96" class="node-label">EPI</text>
+            </g>
+            <g class="moat-node" id="moat-node-eco">
+              <circle cx="300" cy="80" r="38" class="node-circle node-eco" />
+              <text x="300" y="75" class="node-emoji">🌪️</text>
+              <text x="300" y="96" class="node-label">ECO</text>
+            </g>
+            <g class="moat-node" id="moat-node-supply">
+              <circle cx="200" cy="230" r="38" class="node-circle node-supply" />
+              <text x="200" y="225" class="node-emoji">♻️</text>
+              <text x="200" y="246" class="node-label">SUPPLY</text>
+            </g>
+
+            <!-- Link count badges -->
+            <g id="badge-epi-eco" class="link-badge" style="display:none;">
+              <circle cx="200" cy="65" r="14" class="badge-bg" />
+              <text x="200" y="70" class="badge-text" id="badge-epi-eco-text">0</text>
+            </g>
+            <g id="badge-eco-supply" class="link-badge" style="display:none;">
+              <circle cx="260" cy="165" r="14" class="badge-bg" />
+              <text x="260" y="170" class="badge-text" id="badge-eco-supply-text">0</text>
+            </g>
+            <g id="badge-epi-supply" class="link-badge" style="display:none;">
+              <circle cx="140" cy="165" r="14" class="badge-bg" />
+              <text x="140" y="170" class="badge-text" id="badge-epi-supply-text">0</text>
+            </g>
+          </svg>
+        </div>
+        <div class="moat-stats-row">
+          <div class="moat-stat">
+            <span class="moat-stat-val" id="moat-total">0</span>
+            <span class="moat-stat-label">Convergences</span>
+          </div>
+          <div class="moat-stat">
+            <span class="moat-stat-val" id="moat-vectors">0</span>
+            <span class="moat-stat-label">Vectors in Memory</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Live Convergence Alerts Feed -->
+      <div class="moat-alerts-card">
+        <h4 class="moat-card-title">⚡ Live Convergence Alerts</h4>
+        <div class="moat-alerts-list" id="moat-alerts-list">
+          <div class="moat-empty">
+            <span class="moat-empty-icon">🔍</span>
+            <span>Scanning for cross-mode patterns...</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       LIVE INTELLIGENCE DASHBOARD
+  ═══════════════════════════════════════════ -->
+  <section class="dashboard-section" id="dashboard">
+    <div class="section-header">
+      <div class="section-label" id="dashboard-mode-label">♻️ SUPPLY-SENTRY MODE</div>
+      <h2 class="section-title">Live Intelligence Dashboard</h2>
+      <p class="section-subtitle">Real-time supply chain threat feed powered by Multi-Agent LangGraph pipeline with RAG memory.</p>
+    </div>
+
+    <!-- Mode Toggle Bar -->
+    <div class="mode-toggle-bar" id="mode-toggle-bar">
+      <button class="mode-toggle-btn active" id="btn-mode-supply" data-mode="supply">
+        <span class="mode-btn-icon">♻️</span>
+        <span class="mode-btn-label">Supply-Sentry</span>
+        <span class="mode-btn-sdg">SDG 12</span>
+        <div class="mode-btn-indicator supply-bg"></div>
+      </button>
+    </div>
+
+    <div class="dashboard-layout">
+
+      <!-- LEFT: Alert Feed -->
+      <div class="dashboard-main">
+
+        <!-- Convergence Warning Panel -->
+        <div class="convergence-panel" id="convergence-panel" style="display:none;">
+          <div class="convergence-icon">⚡</div>
+          <div class="convergence-content">
+            <div class="convergence-title">CROSS-MODE CONVERGENCE DETECTED</div>
+            <div class="convergence-text" id="convergence-text">Multiple sentry modes detected overlapping threat signals — compound risk elevated.</div>
+          </div>
+          <button class="convergence-close" id="btn-convergence-close" onclick="closeConvergence()">✕</button>
+        </div>
+
+        <!-- Alert Feed Header -->
+        <div class="feed-header">
+          <h3 class="feed-title" id="feed-title">♻️ Supply Chain Disruption Alerts</h3>
+          <div class="feed-controls">
+            <button class="btn-icon" id="btn-refresh-feed" onclick="refreshFeed()" title="Refresh alerts">
+              <span class="btn-icon-sym">↻</span> Refresh
+            </button>
+            <button class="btn-icon btn-danger-icon" id="btn-clear-feed" onclick="clearFeed()" title="Clear feed">
+              <span class="btn-icon-sym">✕</span> Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Alerts Container -->
+        <div class="alerts-container" id="alerts-container">
+          <div class="alert-loading" id="alert-loading">
+            <div class="spinner"></div>
+            <span>Fetching intelligence...</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT SIDEBAR -->
+      <div class="dashboard-sidebar">
+
+        <!-- Autonomous Agent Status -->
+        <div class="sidebar-card trigger-card" id="autonomous-card">
+          <h4 class="sidebar-card-title">🤖 Agent Execution</h4>
+          <p class="sidebar-card-desc">The AI is autonomously scanning RSS feeds 24/7. Currently analyzing:</p>
+          <div id="current-analysis-display" class="current-analysis-box">
+            <em>Waiting for next signal...</em>
+          </div>
+          <div class="active-node-indicator" id="active-node-indicator">
+            <span class="pulse-dot"></span> 
+            <span id="active-node-text">Idling (Waiting 20s)</span>
+          </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="sidebar-card status-card">
+          <h4 class="sidebar-card-title">📡 System Status</h4>
+          <div class="status-rows">
+            <div class="status-row">
+              <span class="status-label">Active Mode</span>
+              <span class="status-value mode-badge" id="sidebar-mode-badge">SUPPLY</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Feed Health</span>
+              <span class="status-value status-ok">● All Feeds OK</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Last Poll</span>
+              <span class="status-value" id="status-last-poll">Just now</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Uptime</span>
+              <span class="status-value status-ok">99.7%</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Memory (RAG)</span>
+              <span class="status-value" id="status-memory">Loading...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="sidebar-card stats-card">
+          <h4 class="sidebar-card-title">📊 Mode Stats</h4>
+          <div class="mini-stats" id="mini-stats">
+            <div class="mini-stat"><div class="mini-stat-val supply-color" id="mini-supply">0</div><div class="mini-stat-label">♻️ Supply</div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════ -->
+  <footer class="footer" id="footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <div class="footer-logo">🛡️ Supply<span class="accent">Sentry</span></div>
+        <div class="footer-tagline">AI-powered supply chain disruption intelligence for a more resilient world.</div>
+        <div class="footer-sdgs">
+          <span class="sdg-badge sdg-12">SDG 12 — Responsible Consumption & Production</span>
+        </div>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col">
+          <div class="footer-col-title">Platform</div>
+          <button class="footer-link" onclick="scrollToSection('dashboard')">Dashboard</button>
+          <a class="footer-link" href="conveyor.html" style="text-decoration:none;">Live Scanner</a>
+          <a class="footer-link" href="globe.html" style="text-decoration:none;">Globe View</a>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">API</div>
+          <a class="footer-link" href="http://localhost:8000/api/docs" target="_blank">API Docs</a>
+          <a class="footer-link" href="http://localhost:8000/api/alerts" target="_blank">GET /alerts</a>
+          <a class="footer-link" href="http://localhost:8000/api/status" target="_blank">GET /status</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 SupplySentry — Google Solution Challenge</span>
+      <span class="footer-bottom-right">Built with ❤️ for resilient supply chains</span>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════
+       ALERT DETAIL MODAL
+  ═══════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-overlay" style="display:none;" onclick="closeModal(event)">
+    <div class="modal" id="alert-modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">Alert Details</h3>
+        <button class="modal-close" id="btn-close-modal" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

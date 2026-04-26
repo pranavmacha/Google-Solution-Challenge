@@ -1,0 +1,19 @@
+# Core LangGraph + LangChain
+langgraph
+langchain
+langchain-community
+langchain-ollama
+
+# Local embeddings (no API key needed)
+sentence-transformers
+
+# Vector DB
+qdrant-client
+
+# Search & ingestion
+duckduckgo-search
+feedparser
+
+# Utilities
+python-dotenv
+requests

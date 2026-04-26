@@ -1,0 +1,22 @@
+{
+    "name": "GlobalSentry Demo User",
+    "stakeholder_type": "government_planner",
+    "region_of_interest": "India",
+    "sub_regions": [
+        "South Asia",
+        "Maharashtra",
+        "Tamil Nadu",
+        "Delhi NCR",
+        "Kerala"
+    ],
+    "active_sentry_mode": "supply",
+    "alert_threshold": 0.5,
+    "interests": [
+        "natural disasters",
+        "disease outbreaks",
+        "supply chain disruptions",
+        "monsoon flooding",
+        "cyclone tracking",
+        "public health emergencies"
+    ]
+}
