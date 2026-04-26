@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 </head>
 <body>
 
@@ -107,6 +108,43 @@
 
     <div class="hero-scroll-hint">
       <div class="scroll-arrow"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       SCROLL TRANSITION — GLOBAL THREAT MODEL
+  ═══════════════════════════════════════════ -->
+  <section class="global-transition-section" id="global-threat-model" aria-label="Global supply chain threat model">
+    <div class="global-transition-sticky">
+      <div class="global-space-field" aria-hidden="true"></div>
+      <div class="global-scan-grid" aria-hidden="true"></div>
+
+      <div class="global-copy">
+        <div class="section-label globe-section-label">Live Threat Surface</div>
+        <h2 class="section-title globe-section-title">Global Risk Model</h2>
+        <p class="section-subtitle globe-section-subtitle">
+          A rotating command view of supply chain pressure points, route disruption signals, and critical logistics corridors.
+        </p>
+      </div>
+
+      <div class="globe-stage" id="globe-stage">
+        <canvas id="threat-globe-canvas" aria-hidden="true"></canvas>
+        <div class="globe-label-layer" id="globe-label-layer"></div>
+        <div class="globe-orbit-readout" aria-hidden="true">
+          <span class="readout-kicker">Threat sweep</span>
+          <span class="readout-value" id="globe-readout">0%</span>
+        </div>
+      </div>
+
+      <div class="globe-threat-panel">
+        <div class="globe-panel-title">Active Watchpoints</div>
+        <div class="globe-panel-list">
+          <div><span class="panel-dot dot-critical"></span>Port congestion and rerouting</div>
+          <div><span class="panel-dot dot-warning"></span>Raw material volatility</div>
+          <div><span class="panel-dot dot-supply"></span>Supplier delay propagation</div>
+        </div>
+        <a class="globe-panel-link" href="globe.html">Open satellite map</a>
+      </div>
     </div>
   </section>
 
