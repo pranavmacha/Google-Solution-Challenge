@@ -1,16 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SupplySentry — Supply Chain Intelligence</title>
-  <meta name="description" content="SupplySentry: AI-powered supply chain disruption intelligence platform. Real-time monitoring of trade routes, ESG compliance, and logistics risks. Addressing SDG 12." />
+  <meta name="description"
+    content="SupplySentry: AI-powered supply chain disruption intelligence platform. Real-time monitoring of trade routes, ESG compliance, and logistics risks. Addressing SDG 12." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 </head>
+
 <body>
 
   <!-- ═══════════════════════════════════════════
@@ -40,7 +46,8 @@
           <div class="live-dot"></div>
           <span>LIVE MONITORING</span>
         </div>
-        <a href="conveyor.html" class="btn-ghost btn-sm" style="margin-right: 15px; text-decoration: none;">Live Scanner →</a>
+        <a href="conveyor.html" class="btn-ghost btn-sm" style="margin-right: 15px; text-decoration: none;">Live Scanner
+          →</a>
         <button class="btn-primary btn-sm" id="btn-launch-dashboard" onclick="scrollToDashboard()">
           Launch Dashboard ↓
         </button>
@@ -111,6 +118,42 @@
   </section>
 
   <!-- ═══════════════════════════════════════════
+       SCROLL TRANSITION — GLOBAL THREAT MODEL
+  ═══════════════════════════════════════════ -->
+  <section class="global-transition-section" id="global-threat-model" aria-label="Global supply chain threat model">
+    <div class="global-transition-sticky">
+      <div class="global-space-field" aria-hidden="true"></div>
+      <div class="global-scan-grid" aria-hidden="true"></div>
+
+      <div class="global-copy">
+        <div class="section-label globe-section-label">Live Threat Surface</div>
+        <h2 class="section-title globe-section-title">Sorry For what had happend, I really care <br> about you and I'll
+          never do
+          something to hurt you <br> so please don't be scared</h2>
+        <p class="section-subtitle globe-section-subtitle">
+          A rotating command view of supply chain pressure points, route disruption signals, and critical logistics
+          corridors.
+        </p>
+      </div>
+
+      <div class="globe-stage" id="globe-stage">
+        <canvas id="threat-globe-canvas" aria-hidden="true"></canvas>
+        <div class="globe-label-layer" id="globe-label-layer"></div>
+      </div>
+
+      <div class="globe-threat-panel">
+        <div class="globe-panel-title">Active Watchpoints</div>
+        <div class="globe-panel-list">
+          <div><span class="panel-dot dot-critical"></span>Port congestion and rerouting</div>
+          <div><span class="panel-dot dot-warning"></span>Raw material volatility</div>
+          <div><span class="panel-dot dot-supply"></span>Supplier delay propagation</div>
+        </div>
+        <a class="globe-panel-link" href="globe.html">Open satellite map</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
        CORE CAPABILITIES SECTION (NEW)
   ═══════════════════════════════════════════ -->
   <section class="capabilities-section reveal" id="capabilities">
@@ -124,17 +167,20 @@
       <div class="cap-card">
         <div class="cap-icon">📡</div>
         <h3 class="cap-title">Live RSS Ingestion</h3>
-        <p class="cap-desc">Continuous monitoring of industry feeds, trade publications, and logistics data streams for supply chain signals.</p>
+        <p class="cap-desc">Continuous monitoring of industry feeds, trade publications, and logistics data streams for
+          supply chain signals.</p>
       </div>
       <div class="cap-card">
         <div class="cap-icon">🧠</div>
         <h3 class="cap-title">RAG-Powered Memory</h3>
-        <p class="cap-desc">Historical disruption patterns retrieved from vector databases to prevent duplicate alerts and enhance risk scoring.</p>
+        <p class="cap-desc">Historical disruption patterns retrieved from vector databases to prevent duplicate alerts
+          and enhance risk scoring.</p>
       </div>
       <div class="cap-card">
         <div class="cap-icon">🤖</div>
         <h3 class="cap-title">Autonomous Agents</h3>
-        <p class="cap-desc">Multi-agent LangGraph pipeline autonomously triages, analyzes, and validates supply chain threats 24/7.</p>
+        <p class="cap-desc">Multi-agent LangGraph pipeline autonomously triages, analyzes, and validates supply chain
+          threats 24/7.</p>
       </div>
     </div>
   </section>
@@ -146,7 +192,8 @@
     <div class="section-header">
       <div class="section-label">Our Mission</div>
       <h2 class="section-title">Protecting Global Supply Chains</h2>
-      <p class="section-subtitle">AI-powered intelligence targeting UN SDG 12 — ensuring responsible consumption and production through proactive disruption detection.</p>
+      <p class="section-subtitle">AI-powered intelligence targeting UN SDG 12 — ensuring responsible consumption and
+        production through proactive disruption detection.</p>
     </div>
 
     <div class="pillars-grid">
@@ -159,7 +206,8 @@
         <div class="pillar-sdg-badge">SDG 12</div>
         <h3 class="pillar-title">Supply-Sentry</h3>
         <p class="pillar-desc">
-          Supply chain transparency via ESG reports, trade route monitoring, and whistleblower data. Detects disruptions, violations, and shortages before they cascade.
+          Supply chain transparency via ESG reports, trade route monitoring, and whistleblower data. Detects
+          disruptions, violations, and shortages before they cascade.
         </p>
         <ul class="pillar-features">
           <li>✓ ESG report analysis</li>
@@ -170,7 +218,8 @@
           <li>✓ Sanctions & tariff monitoring</li>
         </ul>
         <div class="pillar-footer">
-          <div class="pillar-stat"><span class="pillar-stat-num supply-color" id="supply-threat-count">—</span> disruptions detected</div>
+          <div class="pillar-stat"><span class="pillar-stat-num supply-color" id="supply-threat-count">—</span>
+            disruptions detected</div>
           <div class="pillar-threat-ticker" id="supply-threat-ticker">
             <div class="threat-ticker-label">⚡ Latest Disruptions</div>
             <ul class="threat-ticker-list" id="supply-consequences-list"></ul>
@@ -196,7 +245,7 @@
 
     <div class="infographics-grid" style="grid-template-columns: 1fr;">
       <div class="infra-card" id="infra-supply" style="max-width: 700px; margin: 0 auto;">
-        <h3 class="infra-title">Supply-Sentry:<br/>Disruption Factors</h3>
+        <h3 class="infra-title">Supply-Sentry:<br />Disruption Factors</h3>
         <div class="chart-container">
           <canvas id="chartSupply"></canvas>
         </div>
@@ -211,7 +260,8 @@
     <div class="section-header">
       <div class="section-label">🧠 Intelligence Memory</div>
       <h2 class="section-title">Supply Chain Risk Engine</h2>
-      <p class="section-subtitle">Cross-referencing disruption signals across trade routes, suppliers, and geopolitical events to surface hidden risks.</p>
+      <p class="section-subtitle">Cross-referencing disruption signals across trade routes, suppliers, and geopolitical
+        events to surface hidden risks.</p>
     </div>
 
     <div class="moat-layout">
@@ -291,7 +341,8 @@
     <div class="section-header">
       <div class="section-label" id="dashboard-mode-label">♻️ SUPPLY-SENTRY MODE</div>
       <h2 class="section-title">Live Intelligence Dashboard</h2>
-      <p class="section-subtitle">Real-time supply chain threat feed powered by Multi-Agent LangGraph pipeline with RAG memory.</p>
+      <p class="section-subtitle">Real-time supply chain threat feed powered by Multi-Agent LangGraph pipeline with RAG
+        memory.</p>
     </div>
 
     <!-- Mode Toggle Bar -->
@@ -314,7 +365,8 @@
           <div class="convergence-icon">⚡</div>
           <div class="convergence-content">
             <div class="convergence-title">CROSS-MODE CONVERGENCE DETECTED</div>
-            <div class="convergence-text" id="convergence-text">Multiple sentry modes detected overlapping threat signals — compound risk elevated.</div>
+            <div class="convergence-text" id="convergence-text">Multiple sentry modes detected overlapping threat
+              signals — compound risk elevated.</div>
           </div>
           <button class="convergence-close" id="btn-convergence-close" onclick="closeConvergence()">✕</button>
         </div>
@@ -353,7 +405,7 @@
             <em>Waiting for next signal...</em>
           </div>
           <div class="active-node-indicator" id="active-node-indicator">
-            <span class="pulse-dot"></span> 
+            <span class="pulse-dot"></span>
             <span id="active-node-text">Idling (Waiting 20s)</span>
           </div>
         </div>
@@ -389,7 +441,10 @@
         <div class="sidebar-card stats-card">
           <h4 class="sidebar-card-title">📊 Mode Stats</h4>
           <div class="mini-stats" id="mini-stats">
-            <div class="mini-stat"><div class="mini-stat-val supply-color" id="mini-supply">0</div><div class="mini-stat-label">♻️ Supply</div></div>
+            <div class="mini-stat">
+              <div class="mini-stat-val supply-color" id="mini-supply">0</div>
+              <div class="mini-stat-label">♻️ Supply</div>
+            </div>
           </div>
         </div>
 
@@ -451,4 +506,5 @@
 
   <script src="app.js"></script>
 </body>
+
 </html>

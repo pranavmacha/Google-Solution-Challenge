@@ -14,6 +14,8 @@ const state = {
   alerts: [],
 };
 
+const charts = {};
+
 // ─── Mode Config ────────────────────────────────────────────────────────────
 const MODE_CONFIG = {
   supply: {
@@ -31,7 +33,8 @@ function switchMode(mode) {
   state.activeMode = mode;
 
   // Body class
-  document.body.className = MODE_CONFIG[mode].bodyClass;
+  document.body.classList.remove(...Object.values(MODE_CONFIG).map(config => config.bodyClass));
+  document.body.classList.add(MODE_CONFIG[mode].bodyClass);
 
   // Navbar buttons
   document.querySelectorAll('.nav-mode-btn').forEach(btn => {
@@ -401,6 +404,378 @@ function createParticles() {
   }
 }
 
+// ─── Scroll-driven dark theme + globe progress ──────────────────────────────
+function initGlobalThreatTransition() {
+  const section = document.getElementById('global-threat-model');
+  if (!section) return;
+
+  let targetProgress = 0;
+  let currentProgress = 0;
+  let rafId = null;
+
+  const tick = () => {
+    currentProgress += (targetProgress - currentProgress) * 0.13;
+    if (Math.abs(targetProgress - currentProgress) < 0.001) currentProgress = targetProgress;
+
+    section.style.setProperty('--globe-progress', currentProgress.toFixed(3));
+
+    if (currentProgress !== targetProgress) {
+      rafId = requestAnimationFrame(tick);
+    } else {
+      rafId = null;
+    }
+  };
+
+  const update = () => {
+    const rect = section.getBoundingClientRect();
+    const travel = Math.max(1, rect.height - window.innerHeight);
+    targetProgress = Math.min(1, Math.max(0, -rect.top / travel));
+    const shouldBeDark = window.scrollY > section.offsetTop - window.innerHeight * 0.42;
+
+    document.body.classList.toggle('theme-threat-dark', shouldBeDark);
+    if (!rafId) rafId = requestAnimationFrame(tick);
+  };
+
+  update();
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+}
+
+// ─── 3D Globe Model ────────────────────────────────────────────────────────
+function initThreatGlobe() {
+  const canvas = document.getElementById('threat-globe-canvas');
+  const stage = document.getElementById('globe-stage');
+  const labelLayer = document.getElementById('globe-label-layer');
+  const section = document.getElementById('global-threat-model');
+  if (!canvas || !stage || !labelLayer || !section || typeof THREE === 'undefined') return;
+
+  const threats = [
+    { label: 'Suez reroute risk', meta: 'Canal corridor', lat: 30.0444, lng: 32.5498, color: '#fb7185' },
+    { label: 'Mumbai port pressure', meta: 'West India logistics', lat: 18.9388, lng: 72.8354, color: '#34d399' },
+    { label: 'Singapore transshipment', meta: 'Container backlog', lat: 1.3521, lng: 103.8198, color: '#fbbf24' },
+    { label: 'Shanghai supplier delays', meta: 'Manufacturing hub', lat: 31.2304, lng: 121.4737, color: '#8ff7c8' },
+    { label: 'Panama canal drought', meta: 'Route capacity', lat: 9.08, lng: -79.68, color: '#fb7185' },
+    { label: 'Rotterdam customs watch', meta: 'EU gateway', lat: 51.9244, lng: 4.4777, color: '#a5b4fc' },
+  ];
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  camera.position.set(0, 0.25, 6.3);
+
+  const globeGroup = new THREE.Group();
+  scene.add(globeGroup);
+
+  scene.add(new THREE.AmbientLight(0x9fffd2, 0.82));
+
+  const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+  keyLight.position.set(-3.2, 2.8, 4.6);
+  scene.add(keyLight);
+
+  const rimLight = new THREE.DirectionalLight(0x34d399, 1.45);
+  rimLight.position.set(4, -1.2, -3.4);
+  scene.add(rimLight);
+
+  const earthTexture = new THREE.CanvasTexture(createEarthTextureCanvas());
+  earthTexture.colorSpace = THREE.SRGBColorSpace;
+  earthTexture.anisotropy = 8;
+
+  const globeMaterial = new THREE.MeshStandardMaterial({
+    map: earthTexture,
+    color: 0xffffff,
+    roughness: 0.78,
+    metalness: 0.02,
+    emissive: new THREE.Color(0x06211a),
+    emissiveIntensity: 0.18,
+  });
+  const globe = new THREE.Mesh(new THREE.SphereGeometry(2, 96, 96), globeMaterial);
+  globeGroup.add(globe);
+
+  const textureLoader = new THREE.TextureLoader();
+  textureLoader.setCrossOrigin('anonymous');
+  textureLoader.load(
+    'assets/earth_atmos_2048.jpg',
+    texture => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      globeMaterial.map = texture;
+      globeMaterial.emissiveIntensity = 0.05;
+      globeMaterial.needsUpdate = true;
+    },
+    undefined,
+    () => {}
+  );
+
+  const atmosphere = new THREE.Mesh(
+    new THREE.SphereGeometry(2.08, 96, 96),
+    new THREE.ShaderMaterial({
+      transparent: true,
+      side: THREE.BackSide,
+      uniforms: {
+        glowColor: { value: new THREE.Color(0x34d399) },
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 glowColor;
+        varying vec3 vNormal;
+        void main() {
+          float intensity = pow(0.68 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+          gl_FragColor = vec4(glowColor, intensity * 0.58);
+        }
+      `,
+    })
+  );
+  globeGroup.add(atmosphere);
+
+  const orbit = new THREE.Mesh(
+    new THREE.TorusGeometry(2.42, 0.004, 12, 180),
+    new THREE.MeshBasicMaterial({ color: 0x8ff7c8, transparent: true, opacity: 0.2 })
+  );
+  orbit.rotation.x = Math.PI / 2.8;
+  orbit.rotation.y = -0.42;
+  globeGroup.add(orbit);
+
+  const labelItems = threats.map((threat, index) => {
+    const point = latLngToVector3(threat.lat, threat.lng, 2.03);
+    const outer = point.clone().multiplyScalar(1.18);
+    const material = new THREE.MeshBasicMaterial({ color: threat.color, transparent: true, opacity: 0.95 });
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(0.045, 24, 24), material);
+    marker.position.copy(point);
+
+    const pulse = new THREE.Mesh(
+      new THREE.SphereGeometry(0.076, 24, 24),
+      new THREE.MeshBasicMaterial({ color: threat.color, transparent: true, opacity: 0.16 })
+    );
+    pulse.position.copy(point);
+
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([point, outer]),
+      new THREE.LineBasicMaterial({ color: threat.color, transparent: true, opacity: 0.55 })
+    );
+
+    const label = document.createElement('div');
+    label.className = 'globe-threat-label';
+    label.innerHTML = `<strong>${escapeHtml(threat.label)}</strong><span>${escapeHtml(threat.meta)}</span>`;
+    labelLayer.appendChild(label);
+
+    globeGroup.add(line, pulse, marker);
+    return { ...threat, point, outer, marker, pulse, line, label, index };
+  });
+
+  const resize = () => {
+    const size = Math.max(320, Math.min(stage.clientWidth, stage.clientHeight || 760));
+    renderer.setSize(size, size, false);
+    camera.aspect = 1;
+    camera.updateProjectionMatrix();
+  };
+
+  const updateLabels = () => {
+    const stageRect = stage.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const canvasOffsetX = canvasRect.left - stageRect.left;
+    const canvasOffsetY = canvasRect.top - stageRect.top;
+
+    labelItems.forEach(item => {
+      const worldPoint = item.outer.clone();
+      globeGroup.localToWorld(worldPoint);
+      const surfacePoint = item.point.clone();
+      globeGroup.localToWorld(surfacePoint);
+
+      const normal = surfacePoint.clone().normalize();
+      const cameraDirection = camera.position.clone().sub(surfacePoint).normalize();
+      const facingCamera = normal.dot(cameraDirection) > -0.35;
+
+      const projected = worldPoint.project(camera);
+      const rawX = canvasOffsetX + (projected.x * 0.5 + 0.5) * canvasRect.width;
+      const rawY = canvasOffsetY + (-projected.y * 0.5 + 0.5) * canvasRect.height;
+      const labelHalfWidth = Math.max(64, item.label.offsetWidth / 2);
+      const labelHalfHeight = Math.max(28, item.label.offsetHeight / 2);
+      const x = Math.min(stageRect.width - labelHalfWidth - 8, Math.max(labelHalfWidth + 8, rawX));
+      const y = Math.min(stageRect.height - labelHalfHeight - 8, Math.max(labelHalfHeight + 8, rawY));
+      const inside = projected.z < 1 && x > 0 && y > 0 && x < stageRect.width && y < stageRect.height;
+
+      item.label.style.left = `${x}px`;
+      item.label.style.top = `${y}px`;
+      item.label.classList.toggle('is-visible', facingCamera && inside);
+    });
+  };
+
+  const dragState = {
+    active: false,
+    lastX: 0,
+    lastY: 0,
+    yaw: 0,
+    pitch: 0,
+    velocityYaw: 0,
+    velocityPitch: 0,
+  };
+
+  const clampPitch = value => Math.min(0.72, Math.max(-0.72, value));
+
+  stage.addEventListener('pointerdown', event => {
+    dragState.active = true;
+    dragState.lastX = event.clientX;
+    dragState.lastY = event.clientY;
+    dragState.velocityYaw = 0;
+    dragState.velocityPitch = 0;
+    stage.classList.add('is-dragging');
+    stage.setPointerCapture?.(event.pointerId);
+  });
+
+  stage.addEventListener('pointermove', event => {
+    if (!dragState.active) return;
+    event.preventDefault();
+
+    const dx = event.clientX - dragState.lastX;
+    const dy = event.clientY - dragState.lastY;
+    dragState.lastX = event.clientX;
+    dragState.lastY = event.clientY;
+
+    dragState.yaw += dx * 0.006;
+    dragState.pitch = clampPitch(dragState.pitch + dy * 0.004);
+    dragState.velocityYaw = dx * 0.00042;
+    dragState.velocityPitch = dy * 0.00028;
+  });
+
+  const endDrag = event => {
+    if (!dragState.active) return;
+    dragState.active = false;
+    stage.classList.remove('is-dragging');
+    stage.releasePointerCapture?.(event.pointerId);
+  };
+
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+
+  const animate = time => {
+    const progress = Number(section.style.getPropertyValue('--globe-progress')) || 0;
+    const slowSpin = dragState.active ? 0 : time * 0.000045;
+
+    if (!dragState.active) {
+      dragState.yaw += dragState.velocityYaw;
+      dragState.pitch = clampPitch(dragState.pitch + dragState.velocityPitch);
+      dragState.velocityYaw *= 0.94;
+      dragState.velocityPitch *= 0.9;
+      if (Math.abs(dragState.velocityYaw) < 0.00001) dragState.velocityYaw = 0;
+      if (Math.abs(dragState.velocityPitch) < 0.00001) dragState.velocityPitch = 0;
+    }
+
+    globeGroup.rotation.y = slowSpin + progress * 0.45 - 0.2 + dragState.yaw;
+    globeGroup.rotation.x = -0.18 + progress * 0.16 + dragState.pitch;
+    globeGroup.scale.setScalar(0.94);
+    orbit.rotation.z = time * 0.00014;
+
+    labelItems.forEach(item => {
+      const pulse = 1 + Math.sin(time * 0.004 + item.index) * 0.34;
+      item.pulse.scale.setScalar(pulse);
+      item.pulse.material.opacity = 0.12 + Math.max(0, Math.sin(time * 0.004 + item.index)) * 0.18;
+    });
+
+    renderer.render(scene, camera);
+    updateLabels();
+    requestAnimationFrame(animate);
+  };
+
+  resize();
+  stage.classList.add('globe-ready');
+  window.addEventListener('resize', resize);
+  requestAnimationFrame(animate);
+}
+
+function latLngToVector3(lat, lng, radius) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lng + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.cos(phi),
+    -radius * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+function createEarthTextureCanvas() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2048;
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  const ocean = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  ocean.addColorStop(0, '#09231e');
+  ocean.addColorStop(0.45, '#0a3a32');
+  ocean.addColorStop(1, '#061614');
+  ctx.fillStyle = ocean;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = 'rgba(143,247,200,0.14)';
+  ctx.lineWidth = 1;
+  for (let lon = -180; lon <= 180; lon += 30) {
+    const x = ((lon + 180) / 360) * canvas.width;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const y = ((90 - lat) / 180) * canvas.height;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  const land = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  land.addColorStop(0, '#6dd7a4');
+  land.addColorStop(0.5, '#2f8f67');
+  land.addColorStop(1, '#8ff7c8');
+  ctx.fillStyle = land;
+  ctx.strokeStyle = 'rgba(230,255,244,0.32)';
+  ctx.lineWidth = 2.4;
+
+  const continents = [
+    [[-168,70],[-136,72],[-104,62],[-82,48],[-72,28],[-96,15],[-112,22],[-126,38],[-150,50],[-168,70]],
+    [[-84,12],[-70,4],[-54,-10],[-46,-25],[-56,-44],[-70,-55],[-78,-30],[-84,12]],
+    [[-18,36],[8,58],[44,68],[92,58],[126,42],[144,20],[110,6],[82,22],[46,12],[30,-8],[16,-34],[-8,-34],[-18,4],[-18,36]],
+    [[-18,34],[12,32],[36,10],[34,-24],[18,-35],[0,-30],[-12,-2],[-18,34]],
+    [[68,24],[88,28],[102,18],[106,0],[96,-10],[78,6],[68,24]],
+    [[112,-10],[154,-16],[154,-38],[128,-42],[112,-28],[112,-10]],
+    [[-52,76],[18,78],[44,72],[18,64],[-34,66],[-52,76]],
+  ];
+
+  continents.forEach(poly => drawGeoPolygon(ctx, poly, canvas.width, canvas.height));
+
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  for (let i = 0; i < 420; i++) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const w = 18 + Math.random() * 80;
+    ctx.beginPath();
+    ctx.ellipse(x, y, w, 2 + Math.random() * 8, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  return canvas;
+}
+
+function drawGeoPolygon(ctx, points, width, height) {
+  ctx.beginPath();
+  points.forEach(([lng, lat], index) => {
+    const x = ((lng + 180) / 360) * width;
+    const y = ((90 - lat) / 180) * height;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
 // ─── Navbar scroll effect ───────────────────────────────────────────────────
 function initNavbarScroll() {
   window.addEventListener('scroll', () => {
@@ -484,6 +859,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavbarScroll();
   initCounterObserver();
   initRevealObserver();
+  initGlobalThreatTransition();
+  initThreatGlobe();
   startStatusClock();
   loadAlerts('supply');   // Load supply chain alerts immediately
   loadThreatCounts();   // Populate pillar card with real threat data
