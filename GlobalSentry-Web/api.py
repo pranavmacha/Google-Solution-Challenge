@@ -6,8 +6,17 @@ Run with: uvicorn api:app --reload --port 8000
 
 import os
 import sys
+import io
 import json
 import random
+
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 import uuid
 import time
 import hashlib
@@ -34,10 +43,10 @@ try:
     from sentry import global_sentry_app
     os.chdir(_original_cwd)
     AGENT_AVAILABLE = True
-    print(f"[API] ✅ SupplySentry agent loaded from: {RADIO_DIR}")
+    print(f"[API] [OK] SupplySentry agent loaded from: {RADIO_DIR}")
 except Exception as e:
     os.chdir(_original_cwd) if '_original_cwd' in dir() else None
-    print(f"[API] ⚠️ Agent import failed: {e}")
+    print(f"[API] [WARN] Agent import failed: {e}")
     print(f"[API]    Falling back to RSS-only mode.")
 
 app = FastAPI(
@@ -367,7 +376,7 @@ def run_real_agent_stream(headline: str, mode: str):
                 if _state["current_analysis"] and _state["current_analysis"]["headline"] == headline:
                     _state["current_analysis"]["active_node"] = node_name
 
-        print(f"[API] ✅ Agent stream completed for: {headline[:60]}")
+        print(f"[API] [DONE] Agent stream completed for: {headline[:60]}")
     except Exception as e:
         import traceback
         print(f"[API] Agent streaming failed: {e}")
@@ -774,7 +783,14 @@ async def autonomous_agent_loop():
 
     pipeline_nodes = ["profiler", "triage", "retriever", "analyst", "locator", "correlator", "validator", "notify", "archiver"]
     BATCH_SIZE = 5  # Process 5 headlines per mode before rotating
-        
+
+    def _safe_log(msg: str):
+        """Print a string safely on Windows by replacing unencodable chars."""
+        try:
+            print(msg)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            print(msg.encode("ascii", errors="replace").decode("ascii"))
+
     while True:
         try:
             # Build queue of unprocessed supply chain headlines
@@ -783,57 +799,63 @@ async def autonomous_agent_loop():
             queue = [h for h in headlines if h["headline"] not in _processed_headlines]
 
             for feed_item in queue[:BATCH_SIZE]:
-                        hl = feed_item["headline"]
-                        if hl in _processed_headlines:
-                            continue
+                hl = feed_item["headline"]
+                if hl in _processed_headlines:
+                    continue
 
-                        print(f"\n[API] \U0001f575\ufe0f Auto-analyzing [SUPPLY]: {hl[:60]}...")
+                try:
+                    hl_safe = hl.encode("ascii", errors="replace").decode("ascii")
+                    _safe_log(f"\n[API] [SCAN] Auto-analyzing [SUPPLY]: {hl_safe[:60]}...")
 
-                        if AGENT_AVAILABLE:
-                            _state["current_analysis"] = {"headline": hl, "mode": "supply", "active_node": "profiler"}
-                            pre_alerts = len(load_live_alerts())
-                            await asyncio.to_thread(run_real_agent_stream, hl, "supply")
-                            post_alerts = len(load_live_alerts())
-                            if post_alerts == pre_alerts:
-                                _state["recent_rejections"].insert(0, {"headline": hl, "mode": "supply", "timestamp": datetime.utcnow().isoformat()})
-                                _state["recent_rejections"] = _state["recent_rejections"][:10]
-                        else:
-                            # ── Simulated analysis pipeline ──
-                            for node in pipeline_nodes:
-                                _state["current_analysis"] = {"headline": hl, "mode": "supply", "active_node": node}
-                                await asyncio.sleep(random.uniform(0.4, 1.2))
+                    if AGENT_AVAILABLE:
+                        _state["current_analysis"] = {"headline": hl, "mode": "supply", "active_node": "profiler"}
+                        pre_alerts = len(load_live_alerts())
+                        await asyncio.to_thread(run_real_agent_stream, hl, "supply")
+                        post_alerts = len(load_live_alerts())
+                        if post_alerts == pre_alerts:
+                            _state["recent_rejections"].insert(0, {"headline": hl, "mode": "supply", "timestamp": datetime.utcnow().isoformat()})
+                            _state["recent_rejections"] = _state["recent_rejections"][:10]
+                    else:
+                        # ── Simulated analysis pipeline ──
+                        for node in pipeline_nodes:
+                            _state["current_analysis"] = {"headline": hl, "mode": "supply", "active_node": node}
+                            await asyncio.sleep(random.uniform(0.4, 1.2))
 
-                            severity = random.randint(2, 5)
-                            confidence = round(random.uniform(0.65, 0.95), 2)
-                            loc = random.choice(sa_locations)
+                        severity = random.randint(2, 5)
+                        confidence = round(random.uniform(0.65, 0.95), 2)
+                        loc = random.choice(sa_locations)
 
-                            analysis_text = f"Supply chain dependency graph queried. {random.randint(2, 8)} Tier-1 suppliers in impact zone. ESG registry cross-checked. Disruption probability: {random.randint(60, 95)}%."
+                        analysis_text = f"Supply chain dependency graph queried. {random.randint(2, 8)} Tier-1 suppliers in impact zone. ESG registry cross-checked. Disruption probability: {random.randint(60, 95)}%."
 
-                            new_alert = {
-                                "id": str(uuid.uuid4()),
-                                "headline": hl,
-                                "mode": "supply",
-                                "severity": severity,
-                                "confidence": confidence,
-                                "is_verified": confidence > 0.75,
-                                "source": feed_item.get("source", "RSS Intelligence Feed"),
-                                "timestamp": datetime.utcnow().isoformat(),
-                                "analysis": analysis_text,
-                                "convergence_warning": "\u26a0\ufe0f SUPPLY CHAIN RISK: Cross-sector disruption pattern detected in intelligence memory." if random.random() > 0.7 else None,
-                                "lat": loc["lat"],
-                                "lng": loc["lng"],
-                                "location": loc["location"],
-                                "is_raw_feed": False,
-                            }
-                            _state["triggered_analyses"].insert(0, new_alert)
+                        new_alert = {
+                            "id": str(uuid.uuid4()),
+                            "headline": hl,
+                            "mode": "supply",
+                            "severity": severity,
+                            "confidence": confidence,
+                            "is_verified": confidence > 0.75,
+                            "source": feed_item.get("source", "RSS Intelligence Feed"),
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "analysis": analysis_text,
+                            "convergence_warning": "\u26a0\ufe0f SUPPLY CHAIN RISK: Cross-sector disruption pattern detected in intelligence memory." if random.random() > 0.7 else None,
+                            "lat": loc["lat"],
+                            "lng": loc["lng"],
+                            "location": loc["location"],
+                            "is_raw_feed": False,
+                        }
+                        _state["triggered_analyses"].insert(0, new_alert)
 
-                        _processed_headlines.add(hl)
-                        _state["current_analysis"] = None
-                        print(f"[API] \u2705 Analysis complete for: {hl[:50]}...")
-                        
-                        # Pause between analyses
-                        await asyncio.sleep(random.uniform(3, 6))
-                        
+                    _processed_headlines.add(hl)
+                    _state["current_analysis"] = None
+                    _safe_log(f"[API] [OK] Analysis complete for: {hl_safe[:50]}...")
+
+                    # Pause between analyses
+                    await asyncio.sleep(random.uniform(3, 6))
+
+                except Exception as item_err:
+                    _safe_log(f"[API] [SKIP] Failed to process headline (skipping): {item_err}")
+                    _processed_headlines.add(hl)  # Mark as processed so we don't retry endlessly
+                    
         except Exception as e:
             print(f"[API] Error in autonomous loop: {e}")
             
@@ -846,7 +868,7 @@ async def startup_event():
     try:
         if os.path.exists(ALERTS_JSON_PATH):
             os.remove(ALERTS_JSON_PATH)
-            print("[API] 🗑️ Cleared stale alerts.json from previous session.")
+            print("[API] [CLEAR] Cleared stale alerts.json from previous session.")
     except Exception as e:
         print(f"[API] Warning: Could not clear alerts.json: {e}")
 

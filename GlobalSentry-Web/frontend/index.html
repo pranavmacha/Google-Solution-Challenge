@@ -9,6 +9,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <!-- Leaflet for inline globe -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -107,6 +110,60 @@
 
     <div class="hero-scroll-hint">
       <div class="scroll-arrow"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       GLOBE TRANSITION SECTION — Dark Immersive Map
+  ═══════════════════════════════════════════ -->
+  <section class="globe-transition-section" id="globe-section">
+    <!-- Dark gradient wipe overlay -->
+    <div class="globe-dark-wipe"></div>
+
+    <!-- Section Header -->
+    <div class="globe-section-header">
+      <div class="globe-section-label">🛰️ LIVE THREAT MAP</div>
+      <h2 class="globe-section-title">Global Disruption <span class="globe-accent">Monitor</span></h2>
+      <p class="globe-section-subtitle">Real-time satellite view of supply chain threats detected by the AI pipeline.</p>
+    </div>
+
+    <!-- Leaflet Map -->
+    <div class="globe-map-wrapper">
+      <div id="inlineMapViz"></div>
+
+      <!-- Floating Legend -->
+      <div class="inline-globe-legend" id="inline-globe-legend">
+        <div class="inline-legend-title">Disruption Layers</div>
+        <div class="inline-legend-item">
+          <span class="inline-legend-dot" style="background:#10b981; box-shadow:0 0 10px #10b981;"></span>
+          <span class="inline-legend-label">♻️ Supply Chain</span>
+          <span class="inline-legend-count" id="inline-globe-count">0</span>
+        </div>
+        <div class="inline-legend-divider"></div>
+        <div class="inline-legend-item">
+          <span class="inline-legend-dot inline-legend-dot-critical"></span>
+          <span class="inline-legend-label">Critical (Sev 4-5)</span>
+        </div>
+      </div>
+
+      <!-- Floating Stats Pill -->
+      <div class="inline-globe-stats" id="inline-globe-stats">
+        <div class="inline-globe-stat-item">
+          <span class="inline-globe-stat-dot" style="background:#818cf8; box-shadow:0 0 8px #818cf8;"></span>
+          Monitoring: <strong id="inline-globe-region">Global</strong>
+        </div>
+        <div class="inline-globe-stat-divider"></div>
+        <div class="inline-globe-stat-item">
+          <span class="inline-globe-stat-dot" style="background:#10b981;"></span>
+          <strong id="inline-globe-threat-count">0</strong>&nbsp;disruptions tracked
+        </div>
+      </div>
+    </div>
+
+    <!-- Scroll continue hint -->
+    <div class="globe-scroll-continue">
+      <span>Scroll to continue</span>
+      <div class="globe-continue-arrow"></div>
     </div>
   </section>
 

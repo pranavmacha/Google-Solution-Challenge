@@ -475,6 +475,151 @@ function formatTimeAgo(date) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════════════
+//  INLINE GLOBE SECTION — Scroll-triggered dark satellite map
+// ═══════════════════════════════════════════════════════════════════════
+
+let inlineMap = null;
+let inlineMarkersLayer = null;
+let inlineGlobeThreats = [];
+
+function initGlobeSection() {
+  const container = document.getElementById('inlineMapViz');
+  if (!container || typeof L === 'undefined') return;
+
+  // Create Leaflet map centered on South Asia
+  inlineMap = L.map('inlineMapViz', {
+    zoomControl: false,
+    scrollWheelZoom: false,     // Prevent scroll hijack
+    dragging: true,
+    doubleClickZoom: true,
+    touchZoom: true,
+  }).setView([22, 78], 4);
+
+  // Zoom control bottom-right
+  L.control.zoom({ position: 'bottomright' }).addTo(inlineMap);
+
+  // ESRI Satellite tiles
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Imagery &copy; Esri',
+    maxZoom: 18
+  }).addTo(inlineMap);
+
+  // Street labels on top
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; CartoDB',
+    subdomains: 'abcd',
+    maxZoom: 18
+  }).addTo(inlineMap);
+
+  inlineMarkersLayer = L.layerGroup().addTo(inlineMap);
+
+  // Load threats immediately
+  loadInlineGlobeThreats();
+
+  // Fix Leaflet size calculation (section may be off-screen initially)
+  setTimeout(() => { if (inlineMap) inlineMap.invalidateSize(); }, 1000);
+}
+
+async function loadInlineGlobeThreats() {
+  try {
+    const resp = await fetch(`${API_BASE}/globe-threats`);
+    const data = await resp.json();
+    inlineGlobeThreats = data.threats || [];
+
+    // Update region
+    const regionEl = document.getElementById('inline-globe-region');
+    if (regionEl && data.region_focus) regionEl.textContent = data.region_focus;
+  } catch {
+    // keep old data
+  }
+
+  renderInlineGlobeMarkers();
+  updateInlineGlobeCounts();
+}
+
+function renderInlineGlobeMarkers() {
+  if (!inlineMarkersLayer) return;
+  inlineMarkersLayer.clearLayers();
+
+  inlineGlobeThreats.forEach(d => {
+    const color = '#10b981';
+
+    const html = `
+      <div class="inline-marker-pulse-wrapper">
+        <div class="inline-marker-core" style="background:${color}; box-shadow:0 0 10px ${color}"></div>
+        <div class="inline-marker-ring" style="border-color:${color}"></div>
+      </div>
+    `;
+
+    const icon = L.divIcon({
+      className: 'inline-threat-marker',
+      html: html,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+      popupAnchor: [0, -15]
+    });
+
+    const marker = L.marker([d.lat, d.lng], { icon });
+
+    // Severity dots
+    const sevDots = Array.from({ length: 5 }, (_, i) =>
+      `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${
+        i < d.severity ? color : 'rgba(148,163,184,0.25)'
+      };"></span>`
+    ).join('');
+
+    marker.bindPopup(`
+      <div class="inline-popup-headline">${d.headline || 'Unknown Threat'}</div>
+      <div class="inline-popup-meta">
+        <span class="inline-popup-badge">${(d.mode || 'supply').toUpperCase()}</span>
+        <span class="inline-popup-location">📍 ${d.location || 'Unknown'}</span>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:3px;">
+        ${sevDots}
+        <span style="color:#94a3b8;font-size:0.7rem;margin-left:6px;">Severity ${d.severity}/5</span>
+      </div>
+    `);
+
+    marker.on('click', () => {
+      inlineMap.flyTo([d.lat, d.lng], 10, { duration: 1.2 });
+    });
+
+    inlineMarkersLayer.addLayer(marker);
+  });
+}
+
+function updateInlineGlobeCounts() {
+  const count = inlineGlobeThreats.length;
+  const el = document.getElementById('inline-globe-count');
+  if (el) el.textContent = count;
+  const el2 = document.getElementById('inline-globe-threat-count');
+  if (el2) el2.textContent = count;
+}
+
+// ─── Scroll-triggered Dark Theme Observer ────────────────────────────────
+function initGlobeDarkObserver() {
+  const globeSection = document.getElementById('globe-section');
+  if (!globeSection) return;
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        document.body.classList.add('theme-dark');
+        // Fix Leaflet rendering when section becomes visible
+        if (inlineMap) setTimeout(() => inlineMap.invalidateSize(), 200);
+      } else {
+        document.body.classList.remove('theme-dark');
+      }
+    });
+  }, {
+    threshold: 0.15,
+    rootMargin: '-60px 0px 0px 0px'  // Account for sticky navbar
+  });
+
+  observer.observe(globeSection);
+}
+
 // ─── Initialize App ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   // Set initial body mode class
@@ -489,11 +634,16 @@ document.addEventListener('DOMContentLoaded', () => {
   loadThreatCounts();   // Populate pillar card with real threat data
   loadConvergence();    // 🧠 Neural Moat
 
+  // 🌍 Inline Globe Section
+  initGlobeSection();
+  initGlobeDarkObserver();
+
   // Start recurring polling
   setInterval(pollSystemStatus, 2000);
   setInterval(() => loadAlerts(state.activeMode), 15000);
   setInterval(loadThreatCounts, 10000);
   setInterval(loadConvergence, 8000);  // 🧠 Poll convergence every 8s
+  setInterval(loadInlineGlobeThreats, 15000);  // 🌍 Refresh globe threats
 
   // Init Infographics
   initCharts();
