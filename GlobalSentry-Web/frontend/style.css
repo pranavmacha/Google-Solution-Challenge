@@ -528,7 +528,12 @@ body.theme-threat-dark .nav-globe-btn {
   display: grid;
   place-items: center;
   transform: translateY(calc((1 - var(--globe-progress, 0)) * 30px));
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
+
+.globe-stage.is-dragging { cursor: grabbing; }
 
 #threat-globe-canvas {
   width: min(72vw, 76vh, 760px);
@@ -593,30 +598,6 @@ body.theme-threat-dark .nav-globe-btn {
   color: #8ff7c8;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-}
-
-.globe-orbit-readout {
-  position: absolute;
-  right: 7%;
-  bottom: 9%;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: #8ff7c8;
-  font-family: var(--font-display);
-  text-align: right;
-}
-
-.readout-kicker {
-  font-size: 0.62rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #72847e;
-}
-
-.readout-value {
-  font-size: clamp(1.8rem, 4vw, 3.3rem);
-  line-height: 1;
 }
 
 .globe-threat-panel {
@@ -2130,10 +2111,6 @@ body.theme-threat-dark .pillar-threat-ticker::after {
   }
   .globe-threat-label span {
     font-size: 0.58rem;
-  }
-  .globe-orbit-readout {
-    right: 4%;
-    bottom: 5%;
   }
   .globe-panel-list {
     grid-template-columns: 1fr;

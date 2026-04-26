@@ -407,18 +407,33 @@ function createParticles() {
 // ─── Scroll-driven dark theme + globe progress ──────────────────────────────
 function initGlobalThreatTransition() {
   const section = document.getElementById('global-threat-model');
-  const readout = document.getElementById('globe-readout');
   if (!section) return;
+
+  let targetProgress = 0;
+  let currentProgress = 0;
+  let rafId = null;
+
+  const tick = () => {
+    currentProgress += (targetProgress - currentProgress) * 0.13;
+    if (Math.abs(targetProgress - currentProgress) < 0.001) currentProgress = targetProgress;
+
+    section.style.setProperty('--globe-progress', currentProgress.toFixed(3));
+
+    if (currentProgress !== targetProgress) {
+      rafId = requestAnimationFrame(tick);
+    } else {
+      rafId = null;
+    }
+  };
 
   const update = () => {
     const rect = section.getBoundingClientRect();
     const travel = Math.max(1, rect.height - window.innerHeight);
-    const progress = Math.min(1, Math.max(0, -rect.top / travel));
+    targetProgress = Math.min(1, Math.max(0, -rect.top / travel));
     const shouldBeDark = window.scrollY > section.offsetTop - window.innerHeight * 0.42;
 
-    section.style.setProperty('--globe-progress', progress.toFixed(3));
     document.body.classList.toggle('theme-threat-dark', shouldBeDark);
-    if (readout) readout.textContent = `${Math.round(progress * 100)}%`;
+    if (!rafId) rafId = requestAnimationFrame(tick);
   };
 
   update();
@@ -594,12 +609,69 @@ function initThreatGlobe() {
     });
   };
 
+  const dragState = {
+    active: false,
+    lastX: 0,
+    lastY: 0,
+    yaw: 0,
+    pitch: 0,
+    velocityYaw: 0,
+    velocityPitch: 0,
+  };
+
+  const clampPitch = value => Math.min(0.72, Math.max(-0.72, value));
+
+  stage.addEventListener('pointerdown', event => {
+    dragState.active = true;
+    dragState.lastX = event.clientX;
+    dragState.lastY = event.clientY;
+    dragState.velocityYaw = 0;
+    dragState.velocityPitch = 0;
+    stage.classList.add('is-dragging');
+    stage.setPointerCapture?.(event.pointerId);
+  });
+
+  stage.addEventListener('pointermove', event => {
+    if (!dragState.active) return;
+    event.preventDefault();
+
+    const dx = event.clientX - dragState.lastX;
+    const dy = event.clientY - dragState.lastY;
+    dragState.lastX = event.clientX;
+    dragState.lastY = event.clientY;
+
+    dragState.yaw += dx * 0.006;
+    dragState.pitch = clampPitch(dragState.pitch + dy * 0.004);
+    dragState.velocityYaw = dx * 0.00042;
+    dragState.velocityPitch = dy * 0.00028;
+  });
+
+  const endDrag = event => {
+    if (!dragState.active) return;
+    dragState.active = false;
+    stage.classList.remove('is-dragging');
+    stage.releasePointerCapture?.(event.pointerId);
+  };
+
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+
   const animate = time => {
     const progress = Number(section.style.getPropertyValue('--globe-progress')) || 0;
-    const slowSpin = time * 0.00008;
-    globeGroup.rotation.y = slowSpin + progress * 0.45 - 0.2;
-    globeGroup.rotation.x = -0.22 + progress * 0.22;
-    globeGroup.scale.setScalar(0.76 + progress * 0.27);
+    const slowSpin = dragState.active ? 0 : time * 0.000045;
+
+    if (!dragState.active) {
+      dragState.yaw += dragState.velocityYaw;
+      dragState.pitch = clampPitch(dragState.pitch + dragState.velocityPitch);
+      dragState.velocityYaw *= 0.94;
+      dragState.velocityPitch *= 0.9;
+      if (Math.abs(dragState.velocityYaw) < 0.00001) dragState.velocityYaw = 0;
+      if (Math.abs(dragState.velocityPitch) < 0.00001) dragState.velocityPitch = 0;
+    }
+
+    globeGroup.rotation.y = slowSpin + progress * 0.45 - 0.2 + dragState.yaw;
+    globeGroup.rotation.x = -0.18 + progress * 0.16 + dragState.pitch;
+    globeGroup.scale.setScalar(0.94);
     orbit.rotation.z = time * 0.00014;
 
     labelItems.forEach(item => {
