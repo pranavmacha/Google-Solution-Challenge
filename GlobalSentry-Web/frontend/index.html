@@ -9,9 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
-  <!-- Leaflet for inline globe -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Three.js for 3D Globe -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -114,55 +113,40 @@
   </section>
 
   <!-- ═══════════════════════════════════════════
-       GLOBE TRANSITION SECTION — Dark Immersive Map
+       GLOBE TRANSITION — 3D Immersive Globe
   ═══════════════════════════════════════════ -->
   <section class="globe-transition-section" id="globe-section">
-    <!-- Dark gradient wipe overlay -->
+    <!-- Gradient transition overlay (light → dark) -->
     <div class="globe-dark-wipe"></div>
 
-    <!-- Section Header -->
-    <div class="globe-section-header">
-      <div class="globe-section-label">🛰️ LIVE THREAT MAP</div>
-      <h2 class="globe-section-title">Global Disruption <span class="globe-accent">Monitor</span></h2>
-      <p class="globe-section-subtitle">Real-time satellite view of supply chain threats detected by the AI pipeline.</p>
-    </div>
+    <!-- 3D Globe Canvas -->
+    <div class="globe-canvas-wrapper" id="globe-canvas-wrapper">
+      <canvas id="globe3d"></canvas>
 
-    <!-- Leaflet Map -->
-    <div class="globe-map-wrapper">
-      <div id="inlineMapViz"></div>
-
-      <!-- Floating Legend -->
-      <div class="inline-globe-legend" id="inline-globe-legend">
-        <div class="inline-legend-title">Disruption Layers</div>
-        <div class="inline-legend-item">
-          <span class="inline-legend-dot" style="background:#10b981; box-shadow:0 0 10px #10b981;"></span>
-          <span class="inline-legend-label">♻️ Supply Chain</span>
-          <span class="inline-legend-count" id="inline-globe-count">0</span>
-        </div>
-        <div class="inline-legend-divider"></div>
-        <div class="inline-legend-item">
-          <span class="inline-legend-dot inline-legend-dot-critical"></span>
-          <span class="inline-legend-label">Critical (Sev 4-5)</span>
-        </div>
+      <!-- Floating HUD: top-left -->
+      <div class="globe-hud globe-hud-tl" id="globe-hud-tl">
+        <div class="globe-hud-label">🛰️ LIVE THREAT MAP</div>
+        <div class="globe-hud-title">Global Disruption <span class="globe-accent">Monitor</span></div>
+        <div class="globe-hud-sub">AI-detected supply chain threats plotted in real-time.</div>
       </div>
 
-      <!-- Floating Stats Pill -->
-      <div class="inline-globe-stats" id="inline-globe-stats">
-        <div class="inline-globe-stat-item">
-          <span class="inline-globe-stat-dot" style="background:#818cf8; box-shadow:0 0 8px #818cf8;"></span>
-          Monitoring: <strong id="inline-globe-region">Global</strong>
+      <!-- Floating HUD: bottom-center stats pill -->
+      <div class="globe-hud globe-hud-bc" id="globe-hud-bc">
+        <div class="globe-hud-stat">
+          <span class="globe-hud-dot" style="background:#10b981;box-shadow:0 0 8px #10b981"></span>
+          <strong id="globe-hud-count">0</strong>&nbsp;disruptions tracked
         </div>
-        <div class="inline-globe-stat-divider"></div>
-        <div class="inline-globe-stat-item">
-          <span class="inline-globe-stat-dot" style="background:#10b981;"></span>
-          <strong id="inline-globe-threat-count">0</strong>&nbsp;disruptions tracked
+        <div class="globe-hud-divider"></div>
+        <div class="globe-hud-stat">
+          <span class="globe-hud-dot" style="background:#818cf8;box-shadow:0 0 8px #818cf8"></span>
+          Region: <strong id="globe-hud-region">India &amp; S. Asia</strong>
         </div>
       </div>
     </div>
 
     <!-- Scroll continue hint -->
     <div class="globe-scroll-continue">
-      <span>Scroll to continue</span>
+      <span>Scroll to explore</span>
       <div class="globe-continue-arrow"></div>
     </div>
   </section>

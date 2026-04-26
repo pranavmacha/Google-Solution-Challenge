@@ -154,6 +154,11 @@ h1, h2, h3, h4 { line-height: 1.2; font-family: var(--font-heading); }
   transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
+  animation: button-pulse 3s infinite alternate;
+}
+@keyframes button-pulse {
+  0% { box-shadow: 0 0 0 rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 24px rgba(16,185,129,0.5); }
 }
 .btn-primary::after {
   content: '';
@@ -383,7 +388,15 @@ h1, h2, h3, h4 { line-height: 1.2; font-family: var(--font-heading); }
   backdrop-filter: blur(10px);
   box-shadow: 0 10px 40px -10px rgba(0,0,0,0.06);
 }
-.stat-card { text-align: center; flex: 1; }
+.stat-card { text-align: center; flex: 1; animation: float-y 5s ease-in-out infinite; }
+.stat-card:nth-of-type(2) { animation-delay: -1.2s; }
+.stat-card:nth-of-type(3) { animation-delay: -2.4s; }
+.stat-card:nth-of-type(4) { animation-delay: -3.6s; }
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
 .stat-number {
   font-family: var(--font-mono);
   font-size: clamp(2rem, 3.5vw, 3rem);
@@ -1784,15 +1797,14 @@ h1, h2, h3, h4 { line-height: 1.2; font-family: var(--font-heading); }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   GLOBE TRANSITION SECTION — Scroll-triggered Dark Theme
+   GLOBE TRANSITION — 3D Globe + Scroll-driven Dark Theme
 ═══════════════════════════════════════════════════════════════════════ */
 
-/* ─── Dark Theme Toggle (applied to body via JS IntersectionObserver) ── */
+/* ─── Dark Theme Toggle (body.theme-dark via IntersectionObserver) ───── */
 body.theme-dark .navbar {
   background: rgba(5, 8, 16, 0.92);
   border-bottom-color: rgba(148, 163, 184, 0.1);
 }
-body.theme-dark .nav-container { transition: all 0.4s ease; }
 body.theme-dark .logo-text { color: #e2e8f0; }
 body.theme-dark .nav-tagline { color: #64748b; }
 body.theme-dark .nav-mode-btn {
@@ -1818,7 +1830,7 @@ body.theme-dark .btn-ghost:hover {
   background: rgba(16, 185, 129, 0.1);
 }
 
-/* Smooth transitions on everything theme-sensitive */
+/* Smooth transitions on theme-sensitive elements */
 .navbar,
 .logo-text,
 .nav-tagline,
@@ -1826,250 +1838,190 @@ body.theme-dark .btn-ghost:hover {
 .live-indicator,
 .btn-ghost,
 .btn-primary {
-  transition: background 0.5s ease, color 0.5s ease, border-color 0.5s ease;
+  transition: background 0.6s ease, color 0.6s ease, border-color 0.6s ease;
+}
+
+/* ─── Hero Scroll Parallax (class toggled by JS) ──────────────────────── */
+.hero.scroll-fade .hero-content {
+  opacity: 0;
+  transform: translateY(-60px) scale(0.92);
+  filter: blur(6px);
+}
+.hero.scroll-fade .hero-stats {
+  opacity: 0;
+  transform: translateY(40px);
+}
+.hero.scroll-fade .hero-blobs .blob {
+  opacity: 0.1;
+}
+.hero-content,
+.hero-stats,
+.hero-blobs .blob {
+  transition: opacity 0.8s cubic-bezier(0.4,0,0.2,1),
+              transform 0.8s cubic-bezier(0.4,0,0.2,1),
+              filter 0.8s ease;
 }
 
 /* ─── Globe Section Container ─────────────────────────────────────────── */
 .globe-transition-section {
   position: relative;
-  min-height: 100vh;
+  height: 100vh;
   background: #050810;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   overflow: hidden;
-  padding: 0;
   z-index: 1;
 }
 
-/* Dark gradient wipe — top edge blends light hero into dark globe */
+/* Dark gradient wipe — light hero bleeds into dark globe */
 .globe-dark-wipe {
   position: absolute;
-  top: -120px;
+  top: -200px;
   left: 0;
   right: 0;
-  height: 180px;
+  height: 260px;
   background: linear-gradient(to bottom,
     rgba(245, 245, 247, 0) 0%,
-    rgba(5, 8, 16, 0.4) 40%,
-    rgba(5, 8, 16, 0.85) 70%,
+    rgba(5, 8, 16, 0.3) 30%,
+    rgba(5, 8, 16, 0.75) 60%,
     #050810 100%
   );
   z-index: 5;
   pointer-events: none;
 }
 
-/* ─── Globe Section Header ────────────────────────────────────────────── */
-.globe-section-header {
+/* ─── 3D Canvas Wrapper ───────────────────────────────────────────────── */
+.globe-canvas-wrapper {
   position: relative;
-  z-index: 10;
-  text-align: center;
-  padding: 80px 24px 24px;
-  max-width: 700px;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.globe-section-label {
+#globe3d {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+/* ─── Floating HUD Panels ─────────────────────────────────────────────── */
+.globe-hud {
+  position: absolute;
+  z-index: 100;
+  background: rgba(10, 14, 26, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  /* Entrance animation */
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.8s ease 0.6s, transform 0.8s ease 0.6s;
+}
+.globe-transition-section.in-view .globe-hud {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Top-left info card */
+.globe-hud-tl {
+  top: 100px;
+  left: 40px;
+  border-radius: 18px;
+  padding: 24px 28px;
+  max-width: 380px;
+}
+.globe-hud-label {
   font-family: var(--font-display);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: #10b981;
-  margin-bottom: 14px;
-  opacity: 0;
-  transform: translateY(20px);
-  animation: globe-header-in 0.8s 0.3s ease forwards;
+  margin-bottom: 10px;
 }
-
-.globe-section-title {
+.globe-hud-title {
   font-family: var(--font-heading);
-  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-size: 1.6rem;
   font-weight: 800;
   color: #f1f5f9;
-  margin-bottom: 12px;
+  line-height: 1.2;
+  margin-bottom: 8px;
   letter-spacing: -0.02em;
-  opacity: 0;
-  transform: translateY(20px);
-  animation: globe-header-in 0.8s 0.5s ease forwards;
 }
-
 .globe-accent {
   background: linear-gradient(90deg, #10b981, #34d399);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-
-.globe-section-subtitle {
+.globe-hud-sub {
+  font-size: 0.85rem;
   color: #94a3b8;
-  font-size: 1rem;
-  line-height: 1.6;
-  opacity: 0;
-  transform: translateY(20px);
-  animation: globe-header-in 0.8s 0.7s ease forwards;
+  line-height: 1.5;
 }
 
-@keyframes globe-header-in {
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ─── Map Wrapper ─────────────────────────────────────────────────────── */
-.globe-map-wrapper {
-  position: relative;
-  width: 100%;
-  flex: 1;
-  min-height: 65vh;
-  max-height: 75vh;
-  margin: 0 auto;
-  padding: 0 24px 0;
-}
-
-#inlineMapViz {
-  width: 100%;
-  height: 100%;
-  min-height: 65vh;
-  border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  overflow: hidden;
-  box-shadow:
-    0 0 60px rgba(16, 185, 129, 0.08),
-    0 20px 80px rgba(0, 0, 0, 0.5);
-  background: #050810;
-}
-
-/* ─── Floating Legend ─────────────────────────────────────────────────── */
-.inline-globe-legend {
-  position: absolute;
-  top: 20px;
-  left: 44px;
-  background: rgba(10, 14, 26, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 14px;
-  padding: 16px 18px;
-  z-index: 500;
-  min-width: 190px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-}
-
-.inline-legend-title {
-  font-family: var(--font-display);
-  font-size: 0.65rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #818cf8;
-  margin-bottom: 12px;
-}
-
-.inline-legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 0;
-}
-
-.inline-legend-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.inline-legend-dot-critical {
-  background: transparent;
-  border: 2px solid rgba(248, 113, 113, 0.8);
-  box-shadow: 0 0 10px rgba(248, 113, 113, 0.4);
-  animation: legend-crit-pulse 2s infinite;
-}
-@keyframes legend-crit-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.3); opacity: 0.5; }
-}
-
-.inline-legend-label {
-  font-size: 0.78rem;
-  color: #cbd5e1;
-  flex: 1;
-}
-
-.inline-legend-count {
-  font-family: var(--font-display);
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #64748b;
-  min-width: 20px;
-  text-align: right;
-}
-
-.inline-legend-divider {
-  height: 1px;
-  background: rgba(148, 163, 184, 0.1);
-  margin: 8px 0;
-}
-
-/* ─── Floating Stats Pill ─────────────────────────────────────────────── */
-.inline-globe-stats {
-  position: absolute;
-  bottom: 20px;
+/* Bottom-center stats pill */
+.globe-hud-bc {
+  bottom: 60px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(20px);
+  border-radius: 100px;
+  padding: 12px 32px;
   display: flex;
   align-items: center;
   gap: 20px;
-  z-index: 500;
-  background: rgba(10, 14, 26, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  border-radius: 100px;
-  padding: 10px 28px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  white-space: nowrap;
 }
-
-.inline-globe-stat-item {
+.globe-transition-section.in-view .globe-hud-bc {
+  transform: translateX(-50%) translateY(0);
+}
+.globe-hud-stat {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: #94a3b8;
-  white-space: nowrap;
 }
-.inline-globe-stat-item strong {
+.globe-hud-stat strong {
   color: #e2e8f0;
   font-weight: 600;
 }
-
-.inline-globe-stat-dot {
+.globe-hud-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-
-.inline-globe-stat-divider {
+.globe-hud-divider {
   width: 1px;
-  height: 20px;
+  height: 22px;
   background: rgba(148, 163, 184, 0.15);
 }
 
 /* ─── Scroll Continue Hint ────────────────────────────────────────────── */
 .globe-scroll-continue {
-  position: relative;
-  z-index: 10;
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 24px 0 40px;
   color: #475569;
-  font-size: 0.78rem;
-  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-
 .globe-continue-arrow {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-right: 2px solid #475569;
   border-bottom: 2px solid #475569;
   transform: rotate(45deg);
@@ -2080,98 +2032,21 @@ body.theme-dark .btn-ghost:hover {
   50% { transform: rotate(45deg) translateY(6px); opacity: 1; }
 }
 
-/* ─── Inline Map Marker Styles (same as globe.html) ───────────────────── */
-.inline-marker-pulse-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-.inline-marker-core {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  z-index: 2;
-}
-.inline-marker-ring {
-  position: absolute;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  animation: inline-marker-pulse 2s infinite;
-  z-index: 1;
-}
-@keyframes inline-marker-pulse {
-  0% { transform: scale(0.5); opacity: 1; }
-  100% { transform: scale(2.5); opacity: 0; }
-}
-
-/* ─── Leaflet Popup Overrides (inline map) ────────────────────────────── */
-#inlineMapViz .leaflet-popup-content-wrapper {
-  background: rgba(10, 14, 26, 0.95);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
-  padding: 0;
-}
-#inlineMapViz .leaflet-popup-content {
-  margin: 14px 16px;
-  color: #f1f5f9;
-  font-family: var(--font-body);
-  line-height: 1.4;
-  min-width: 220px;
-}
-#inlineMapViz .leaflet-popup-tip {
-  background: rgba(10, 14, 26, 0.95);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-top: none;
-  border-left: none;
-}
-#inlineMapViz .leaflet-container a.leaflet-popup-close-button {
-  color: #94a3b8;
-}
-.inline-popup-headline {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #f1f5f9;
-  margin-bottom: 8px;
-}
-.inline-popup-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.inline-popup-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 100px;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  background: rgba(16,185,129,0.2);
-  color: #10b981;
-}
-.inline-popup-location {
-  font-size: 0.7rem;
-  color: #94a3b8;
-}
-
 /* ─── Globe Section Responsive ────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .globe-map-wrapper { padding: 0 12px; }
-  #inlineMapViz { border-radius: 14px; min-height: 55vh; }
-  .inline-globe-legend { display: none; }
-  .inline-globe-stats {
-    padding: 8px 16px;
-    gap: 10px;
-    font-size: 0.7rem;
+  .globe-hud-tl {
+    top: 80px;
+    left: 16px;
+    right: 16px;
+    max-width: none;
+    padding: 18px 20px;
   }
-  .globe-section-header { padding: 70px 16px 16px; }
+  .globe-hud-title { font-size: 1.2rem; }
+  .globe-hud-bc {
+    padding: 10px 18px;
+    gap: 12px;
+    font-size: 0.72rem;
+    bottom: 50px;
+  }
 }
+

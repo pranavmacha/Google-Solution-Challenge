@@ -476,149 +476,277 @@ function formatTimeAgo(date) {
 
 
 // ═══════════════════════════════════════════════════════════════════════
-//  INLINE GLOBE SECTION — Scroll-triggered dark satellite map
+//  3D GLOBE + SCROLL-DRIVEN ANIMATIONS
 // ═══════════════════════════════════════════════════════════════════════
 
-let inlineMap = null;
-let inlineMarkersLayer = null;
-let inlineGlobeThreats = [];
+let globeScene, globeCamera, globeRenderer, globeMesh, atmosphereMesh;
+let globeThreats = [];
+let threatSprites = [];
+let globeAnimating = false;
+let globeRotationSpeed = 0.003;
 
+// ─── Three.js Globe Init ────────────────────────────────────────────────
 function initGlobeSection() {
-  const container = document.getElementById('inlineMapViz');
-  if (!container || typeof L === 'undefined') return;
+  const canvas = document.getElementById('globe3d');
+  if (!canvas || typeof THREE === 'undefined') return;
 
-  // Create Leaflet map centered on South Asia
-  inlineMap = L.map('inlineMapViz', {
-    zoomControl: false,
-    scrollWheelZoom: false,     // Prevent scroll hijack
-    dragging: true,
-    doubleClickZoom: true,
-    touchZoom: true,
-  }).setView([22, 78], 4);
+  const wrapper = document.getElementById('globe-canvas-wrapper');
+  const w = wrapper.clientWidth;
+  const h = wrapper.clientHeight;
 
-  // Zoom control bottom-right
-  L.control.zoom({ position: 'bottomright' }).addTo(inlineMap);
+  // Scene
+  globeScene = new THREE.Scene();
 
-  // ESRI Satellite tiles
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Imagery &copy; Esri',
-    maxZoom: 18
-  }).addTo(inlineMap);
+  // Camera
+  globeCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+  globeCamera.position.z = 3.2;
 
-  // Street labels on top
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; CartoDB',
-    subdomains: 'abcd',
-    maxZoom: 18
-  }).addTo(inlineMap);
+  // Renderer
+  globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  globeRenderer.setSize(w, h);
+  globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  globeRenderer.setClearColor(0x000000, 0);
 
-  inlineMarkersLayer = L.layerGroup().addTo(inlineMap);
+  // ── Earth Sphere ──
+  const earthGeo = new THREE.SphereGeometry(1, 64, 64);
+  const textureLoader = new THREE.TextureLoader();
 
-  // Load threats immediately
-  loadInlineGlobeThreats();
+  // High-res realistic dark textures
+  const earthMat = new THREE.MeshPhongMaterial({
+    map: textureLoader.load('https://unpkg.com/three-globe/example/img/earth-dark.jpg'),
+    bumpMap: textureLoader.load('https://unpkg.com/three-globe/example/img/earth-topology.png'),
+    bumpScale: 0.02,
+    specularMap: textureLoader.load('https://unpkg.com/three-globe/example/img/earth-water.png'),
+    specular: new THREE.Color(0x333333),
+    shininess: 15,
+  });
+  globeMesh = new THREE.Mesh(earthGeo, earthMat);
+  globeScene.add(globeMesh);
 
-  // Fix Leaflet size calculation (section may be off-screen initially)
-  setTimeout(() => { if (inlineMap) inlineMap.invalidateSize(); }, 1000);
-}
+  // ── Cloud Layer ──
+  const cloudGeo = new THREE.SphereGeometry(1.008, 64, 64);
+  const cloudMat = new THREE.MeshLambertMaterial({
+    map: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png'),
+    transparent: true,
+    opacity: 0.4,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide
+  });
+  const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+  cloudMesh.name = 'clouds';
+  globeMesh.add(cloudMesh);
 
-async function loadInlineGlobeThreats() {
-  try {
-    const resp = await fetch(`${API_BASE}/globe-threats`);
-    const data = await resp.json();
-    inlineGlobeThreats = data.threats || [];
+  // ── Wireframe overlay (gives grid/tech look) ──
+  const wireGeo = new THREE.SphereGeometry(1.012, 36, 36);
+  const wireMat = new THREE.MeshBasicMaterial({
+    color: 0x10b981,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.04,
+  });
+  const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+  globeMesh.add(wireMesh);
 
-    // Update region
-    const regionEl = document.getElementById('inline-globe-region');
-    if (regionEl && data.region_focus) regionEl.textContent = data.region_focus;
-  } catch {
-    // keep old data
+  // ── Atmosphere glow ──
+  const atmosGeo = new THREE.SphereGeometry(1.15, 64, 64);
+  const atmosMat = new THREE.ShaderMaterial({
+    vertexShader: `
+      varying vec3 vNormal;
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vNormal;
+      void main() {
+        float intensity = pow(0.6 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.5);
+        gl_FragColor = vec4(0.063, 0.725, 0.506, 1.0) * intensity * 0.6;
+      }
+    `,
+    blending: THREE.AdditiveBlending,
+    side: THREE.BackSide,
+    transparent: true,
+  });
+  atmosphereMesh = new THREE.Mesh(atmosGeo, atmosMat);
+  globeScene.add(atmosphereMesh);
+
+  // ── Lighting ──
+  const ambient = new THREE.AmbientLight(0x334466, 0.6);
+  globeScene.add(ambient);
+
+  const point1 = new THREE.PointLight(0x10b981, 1.8, 10);
+  point1.position.set(3, 2, 4);
+  globeScene.add(point1);
+
+  const point2 = new THREE.PointLight(0x818cf8, 0.8, 10);
+  point2.position.set(-3, -1, 3);
+  globeScene.add(point2);
+
+  // ── Star Field ──
+  const starGeo = new THREE.BufferGeometry();
+  const starPositions = [];
+  for (let i = 0; i < 2000; i++) {
+    starPositions.push(
+      (Math.random() - 0.5) * 100,
+      (Math.random() - 0.5) * 100,
+      (Math.random() - 0.5) * 100
+    );
   }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.08, transparent: true, opacity: 0.6 });
+  globeScene.add(new THREE.Points(starGeo, starMat));
 
-  renderInlineGlobeMarkers();
-  updateInlineGlobeCounts();
-}
+  // Start animation loop
+  globeAnimating = true;
+  animateGlobe();
 
-function renderInlineGlobeMarkers() {
-  if (!inlineMarkersLayer) return;
-  inlineMarkersLayer.clearLayers();
+  // Load threats
+  loadGlobeThreats();
 
-  inlineGlobeThreats.forEach(d => {
-    const color = '#10b981';
-
-    const html = `
-      <div class="inline-marker-pulse-wrapper">
-        <div class="inline-marker-core" style="background:${color}; box-shadow:0 0 10px ${color}"></div>
-        <div class="inline-marker-ring" style="border-color:${color}"></div>
-      </div>
-    `;
-
-    const icon = L.divIcon({
-      className: 'inline-threat-marker',
-      html: html,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
-      popupAnchor: [0, -15]
-    });
-
-    const marker = L.marker([d.lat, d.lng], { icon });
-
-    // Severity dots
-    const sevDots = Array.from({ length: 5 }, (_, i) =>
-      `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${
-        i < d.severity ? color : 'rgba(148,163,184,0.25)'
-      };"></span>`
-    ).join('');
-
-    marker.bindPopup(`
-      <div class="inline-popup-headline">${d.headline || 'Unknown Threat'}</div>
-      <div class="inline-popup-meta">
-        <span class="inline-popup-badge">${(d.mode || 'supply').toUpperCase()}</span>
-        <span class="inline-popup-location">📍 ${d.location || 'Unknown'}</span>
-      </div>
-      <div style="margin-top:8px;display:flex;align-items:center;gap:3px;">
-        ${sevDots}
-        <span style="color:#94a3b8;font-size:0.7rem;margin-left:6px;">Severity ${d.severity}/5</span>
-      </div>
-    `);
-
-    marker.on('click', () => {
-      inlineMap.flyTo([d.lat, d.lng], 10, { duration: 1.2 });
-    });
-
-    inlineMarkersLayer.addLayer(marker);
+  // Resize handler
+  window.addEventListener('resize', () => {
+    if (!globeRenderer) return;
+    const nw = wrapper.clientWidth;
+    const nh = wrapper.clientHeight;
+    globeCamera.aspect = nw / nh;
+    globeCamera.updateProjectionMatrix();
+    globeRenderer.setSize(nw, nh);
   });
 }
 
-function updateInlineGlobeCounts() {
-  const count = inlineGlobeThreats.length;
-  const el = document.getElementById('inline-globe-count');
-  if (el) el.textContent = count;
-  const el2 = document.getElementById('inline-globe-threat-count');
-  if (el2) el2.textContent = count;
+function animateGlobe() {
+  if (!globeAnimating) return;
+  requestAnimationFrame(animateGlobe);
+
+  if (globeMesh) {
+    globeMesh.rotation.y += globeRotationSpeed;
+    const clouds = globeMesh.getObjectByName('clouds');
+    if (clouds) {
+      clouds.rotation.y += globeRotationSpeed * 0.25;
+    }
+  }
+
+  // Pulse threat sprites
+  const t = Date.now() * 0.003;
+  threatSprites.forEach((sprite, i) => {
+    const scale = 0.04 + Math.sin(t + i * 0.7) * 0.015;
+    sprite.scale.set(scale, scale, 1);
+  });
+
+  globeRenderer.render(globeScene, globeCamera);
 }
 
-// ─── Scroll-triggered Dark Theme Observer ────────────────────────────────
+// ─── Convert lat/lng to 3D position on sphere ──────────────────────────
+function latLngToVector3(lat, lng, radius) {
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lng + 180) * (Math.PI / 180);
+  return new THREE.Vector3(
+    -radius * Math.sin(phi) * Math.cos(theta),
+     radius * Math.cos(phi),
+     radius * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+// ─── Load threats from API and plot on globe ────────────────────────────
+async function loadGlobeThreats() {
+  try {
+    const resp = await fetch(`${API_BASE}/globe-threats`);
+    const data = await resp.json();
+    globeThreats = data.threats || [];
+
+    const regionEl = document.getElementById('globe-hud-region');
+    if (regionEl && data.region_focus) regionEl.textContent = data.region_focus;
+  } catch {
+    // keep existing data
+  }
+
+  plotGlobeThreatPoints();
+  updateGlobeHudCounts();
+}
+
+function plotGlobeThreatPoints() {
+  // Remove old sprites
+  threatSprites.forEach(s => globeMesh.remove(s));
+  threatSprites = [];
+
+  globeThreats.forEach(d => {
+    const pos = latLngToVector3(d.lat, d.lng, 1.03);
+
+    // Glowing sprite
+    const spriteMat = new THREE.SpriteMaterial({
+      color: d.severity >= 4 ? 0xf87171 : 0x10b981,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.position.copy(pos);
+    sprite.scale.set(0.04, 0.04, 1);
+    globeMesh.add(sprite);
+    threatSprites.push(sprite);
+
+    // Outer ring
+    const ringMat = new THREE.SpriteMaterial({
+      color: d.severity >= 4 ? 0xf87171 : 0x10b981,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+    });
+    const ring = new THREE.Sprite(ringMat);
+    ring.position.copy(pos);
+    ring.scale.set(0.08, 0.08, 1);
+    globeMesh.add(ring);
+    threatSprites.push(ring);
+  });
+}
+
+function updateGlobeHudCounts() {
+  const count = globeThreats.length;
+  const el = document.getElementById('globe-hud-count');
+  if (el) el.textContent = count;
+}
+
+// ─── Scroll-driven Hero Parallax + Dark Theme Observer ──────────────────
 function initGlobeDarkObserver() {
+  const heroSection = document.querySelector('.hero');
   const globeSection = document.getElementById('globe-section');
   if (!globeSection) return;
 
+  // 1) IntersectionObserver: toggle dark theme + HUD reveal
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         document.body.classList.add('theme-dark');
-        // Fix Leaflet rendering when section becomes visible
-        if (inlineMap) setTimeout(() => inlineMap.invalidateSize(), 200);
+        globeSection.classList.add('in-view');
       } else {
         document.body.classList.remove('theme-dark');
+        globeSection.classList.remove('in-view');
       }
     });
   }, {
     threshold: 0.15,
-    rootMargin: '-60px 0px 0px 0px'  // Account for sticky navbar
+    rootMargin: '-60px 0px 0px 0px'
   });
-
   observer.observe(globeSection);
+
+  // 2) Scroll listener: hero parallax fade-out as user scrolls toward globe
+  if (heroSection) {
+    window.addEventListener('scroll', () => {
+      const scrollY = window.scrollY;
+      const heroH = heroSection.offsetHeight;
+      const fadeStart = heroH * 0.4;
+      const fadeEnd = heroH * 0.85;
+
+      if (scrollY > fadeStart && scrollY < fadeEnd + 200) {
+        heroSection.classList.add('scroll-fade');
+      } else if (scrollY <= fadeStart) {
+        heroSection.classList.remove('scroll-fade');
+      }
+    }, { passive: true });
+  }
 }
+
 
 // ─── Initialize App ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -643,7 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(() => loadAlerts(state.activeMode), 15000);
   setInterval(loadThreatCounts, 10000);
   setInterval(loadConvergence, 8000);  // 🧠 Poll convergence every 8s
-  setInterval(loadInlineGlobeThreats, 15000);  // 🌍 Refresh globe threats
+  setInterval(loadGlobeThreats, 15000);  // 🌍 Refresh globe threats
 
   // Init Infographics
   initCharts();
