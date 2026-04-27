@@ -1,8 +1,13 @@
 import os
+import warnings
 import requests
 import uuid
 import json
 import re
+
+# Suppress noisy ResourceWarnings from Qdrant's internal SQLite/lock handling (Python 3.13+)
+warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed database")
+warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed file")
 from typing import TypedDict, List, Literal
 from langgraph.graph import StateGraph, END
 from langchain_ollama import ChatOllama
@@ -38,7 +43,7 @@ print(f"[GlobalSentry] Embeddings   : {EMBEDDING_MODEL}")
 
 # ─── DuckDuckGo Search ────────────────────────────────────────────────────
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 def search_tool_run(query: str) -> str:
     results = []

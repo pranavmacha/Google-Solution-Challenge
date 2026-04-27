@@ -200,7 +200,7 @@ async function fetchAccepted() {
 
 async function fetchPolledInputs() {
     try {
-        const modes = ['epi', 'eco', 'supply'];
+        const modes = ['supply'];
         
         const fetchPromises = modes.map(m => fetch(`http://localhost:8000/api/feed/${m}?limit=50`).then(res => res.ok ? res.json() : null));
         const results = await Promise.all(fetchPromises);
