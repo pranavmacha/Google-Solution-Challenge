@@ -4,8 +4,8 @@
 ═══════════════════════════════════════════════════════════════════════ */
 
 // ─── Configuration ──────────────────────────────────────────────────────────
-const API_BASE = 'http://localhost:8000/api';
-const USE_API  = true; // FastAPI is running at localhost:8000 with /api/ prefix
+const API_BASE = '/api';
+const USE_API  = true; // FastAPI serves the API from the same origin.
 
 // No mock data — all alerts come from live Indian RSS feeds and the AI agent pipeline.
 

@@ -1,16 +1,20 @@
 import os
+import warnings
 import requests
 import uuid
 import json
 import re
+
+# Suppress noisy ResourceWarnings from Qdrant's internal SQLite/lock handling (Python 3.13+)
+warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed database")
+warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed file")
 from typing import TypedDict, List, Literal
 from langgraph.graph import StateGraph, END
 from langchain_ollama import ChatOllama
-from langchain_community.vectorstores import Qdrant
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import (
-    Distance, VectorParams, Filter, FieldCondition, MatchValue
+    Distance, PointStruct, VectorParams, Filter, FieldCondition, MatchAny, MatchValue
 )
 from dotenv import load_dotenv
 
@@ -38,7 +42,7 @@ print(f"[GlobalSentry] Embeddings   : {EMBEDDING_MODEL}")
 
 # ─── DuckDuckGo Search ────────────────────────────────────────────────────
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 def search_tool_run(query: str) -> str:
     results = []
@@ -57,7 +61,7 @@ def search_tool_run(query: str) -> str:
 # file lock, so eager initialization causes a "database already in use"
 # conflict. By deferring init to first use, we avoid the race entirely.
 
-QDRANT_PATH     = "./qdrant_data"
+QDRANT_PATH     = os.getenv("QDRANT_PATH", "./qdrant_data")
 COLLECTION_NAME = "global_sentry_memory"
 VECTOR_SIZE     = 384           # all-MiniLM-L6-v2 dimension
 
@@ -78,6 +82,45 @@ def get_qdrant_client() -> QdrantClient:
         else:
             print(f"[GlobalSentry] Qdrant collection '{COLLECTION_NAME}' ready.")
     return _qdrant_client
+
+
+def query_memory(query_text: str, *, limit: int, query_filter: Filter | None = None,
+                 score_threshold: float | None = None):
+    """Query Qdrant directly.
+
+    The LangChain Qdrant wrapper still calls QdrantClient.search(), which was
+    removed in newer qdrant-client versions. Use query_points() directly.
+    """
+    query_vector = embeddings.embed_query(query_text)
+    response = get_qdrant_client().query_points(
+        collection_name=COLLECTION_NAME,
+        query=query_vector,
+        query_filter=query_filter,
+        limit=limit,
+        with_payload=True,
+        score_threshold=score_threshold,
+    )
+    return response.points
+
+
+def upsert_memory(text: str, metadata: dict):
+    payload = {"text": text, **metadata}
+    vector = embeddings.embed_query(text)
+    get_qdrant_client().upsert(
+        collection_name=COLLECTION_NAME,
+        points=[
+            PointStruct(
+                id=str(uuid.uuid4()),
+                vector=vector,
+                payload=payload,
+            )
+        ],
+    )
+
+
+def safe_console(text: str) -> str:
+    """Make log text printable on Windows cp1252 consoles."""
+    return str(text).encode("ascii", errors="replace").decode("ascii")
 
 # ─── Mode-Aware Prompts ───────────────────────────────────────────────────
 
@@ -233,7 +276,7 @@ def triage_node(state: AgentState):
         fallback_words = ["danger", "warning", "outbreak", "disaster", "shortage", "flood",
                           "earthquake", "epidemic", "crisis", "collapse"]
         is_threat = any(w in news.lower() for w in fallback_words)
-        logs_msg  = f"Triage [{mode}]: (Fallback) Threat={'Yes' if is_threat else 'No'} — {e}"
+        logs_msg  = f"Triage [{mode}]: (Fallback) Threat={'Yes' if is_threat else 'No'} - {e}"
 
     print(f"[Triage] {logs_msg}")
     return {"is_threat": is_threat, "logs": state.get('logs', []) + [logs_msg]}
@@ -251,9 +294,11 @@ def retriever_node(state: AgentState):
         mode_filter = Filter(
             must=[FieldCondition(key="mode", match=MatchValue(value=mode))]
         )
-        vectorstore = Qdrant(client=get_qdrant_client(), collection_name=COLLECTION_NAME, embeddings=embeddings)
-        docs = vectorstore.similarity_search(news, k=3, filter=mode_filter)
-        context = [doc.page_content for doc in docs]
+        docs = query_memory(news, limit=3, query_filter=mode_filter)
+        context = [
+            (doc.payload or {}).get("text", str(doc.payload or ""))
+            for doc in docs
+        ]
         logs[-1] += f" Found {len(context)} item(s)."
     except Exception as e:
         logs[-1] += f" Search failed: {e}"
@@ -360,20 +405,18 @@ def correlator_node(state: AgentState):
     convergence_warning = ""
 
     try:
-        # Embed the current news item
-        query_vector = embeddings.embed_query(news)
-
-        # Search for semantically similar events from OTHER modes only
+        # Search for semantically similar events from known OTHER modes only.
+        # Older/demo memories may lack mode metadata, so exclude those instead
+        # of treating them as cross-domain evidence.
+        other_modes = [m for m in ("epi", "eco", "supply", "general") if m != mode]
         cross_mode_filter = Filter(
-            must_not=[FieldCondition(key="mode", match=MatchValue(value=mode))]
+            must=[FieldCondition(key="mode", match=MatchAny(any=other_modes))]
         )
-        cross_results = get_qdrant_client().search(
-            collection_name=COLLECTION_NAME,
-            query_vector=query_vector,
+        cross_results = query_memory(
+            news,
             limit=3,
             query_filter=cross_mode_filter,
             score_threshold=CORRELATION_THRESHOLD,
-            with_payload=True,
         )
 
         if cross_results:
@@ -413,7 +456,7 @@ def correlator_node(state: AgentState):
     except Exception as e:
         logs[-1] += f" Correlator error: {e}"
 
-    print(f"[Correlator] {'⚠️ Convergence found!' if convergence_warning else 'No convergence.'}")
+    print(f"[Correlator] {'Convergence found!' if convergence_warning else 'No convergence.'}")
     return {"convergence_warning": convergence_warning, "logs": logs}
 
 
@@ -455,13 +498,13 @@ def notify_node(state: AgentState):
     Also prints a formatted summary to the console.
     """
     mode = state.get('sentry_mode', 'general')
-    mode_icons   = {"epi": "🩺", "eco": "🌪️", "supply": "♻️", "general": "🚨"}
-    severity_bars = {1: "🟢", 2: "🟡", 3: "🟠", 4: "🔴", 5: "🔴🔴"}
+    mode_icons   = {"epi": "EPI", "eco": "ECO", "supply": "SUPPLY", "general": "GENERAL"}
+    severity_bars = {1: "[1]", 2: "[2]", 3: "[3]", 4: "[4]", 5: "[5]"}
 
-    icon       = mode_icons.get(mode, "🚨")
+    icon       = mode_icons.get(mode, "GENERAL")
     severity   = state.get('severity_level', 3)
     confidence = state.get('confidence_score', 0.5)
-    bar        = severity_bars.get(severity, "🔴")
+    bar        = severity_bars.get(severity, "[3]")
     convergence = state.get('convergence_warning', '')
 
     # Build the alert object for the web dashboard
@@ -501,19 +544,19 @@ def notify_node(state: AgentState):
 
     # Console summary
     msg = (
-        f"\n{icon} GLOBALSENTRY ALERT {icon}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n[{icon}] GLOBALSENTRY ALERT [{icon}]\n"
+        f"-------------------------\n"
         f"Mode     : {mode.upper()}-SENTRY\n"
         f"Severity : {bar} {severity}/5\n"
         f"Confidence: {confidence:.0%}\n\n"
-        f"📰 EVENT:\n{state['news_item']}\n\n"
-        f"🔍 ANALYSIS:\n{state['threat_analysis'][:300]}...\n"
+        f"EVENT:\n{state['news_item']}\n\n"
+        f"ANALYSIS:\n{state['threat_analysis'][:300]}...\n"
     )
     if convergence:
         msg += f"\n{convergence[:300]}\n"
 
-    print(f"[Notify] Alert saved to alerts.json → visible on web dashboard")
-    print(msg)
+    print("[Notify] Alert saved to alerts.json; visible on web dashboard")
+    print(safe_console(msg))
 
     return {"logs": state.get('logs', []) + ["Alert saved to web dashboard."]}
 
@@ -526,16 +569,7 @@ def archiver_node(state: AgentState):
     logs     = state.get('logs', []) + [f"Archiver: Storing [{mode}] event..."]
 
     try:
-        vectorstore = Qdrant(
-            client=get_qdrant_client(),
-            collection_name=COLLECTION_NAME,
-            embeddings=embeddings
-        )
-        vectorstore.add_texts(
-            texts=[news],
-            metadatas=[{"mode": mode, "severity": severity, "text": news}],
-            ids=[str(uuid.uuid4())]
-        )
+        upsert_memory(news, {"mode": mode, "severity": severity})
         logs[-1] += " Stored."
     except Exception as e:
         logs[-1] += f" Storage failed: {e}"
@@ -641,8 +675,8 @@ if __name__ == "__main__":
         "logs":                 [],
     }
     result = global_sentry_app.invoke(test_state)
-    print("\n─── Final Logs ───")
+    print("\n--- Final Logs ---")
     for log in result['logs']:
         print(f"  {log}")
     if result.get('convergence_warning'):
-        print(f"\n{result['convergence_warning']}")
+        print(safe_console(f"\n{result['convergence_warning']}"))

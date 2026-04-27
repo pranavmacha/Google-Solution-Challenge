@@ -12,6 +12,7 @@ qdrant-client
 
 # Search & ingestion
 duckduckgo-search
+ddgs
 feedparser
 
 # Utilities

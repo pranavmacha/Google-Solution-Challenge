@@ -8,5 +8,6 @@ langchain-ollama
 langchain-community
 qdrant-client
 duckduckgo-search
+ddgs
 feedparser
 sentence-transformers

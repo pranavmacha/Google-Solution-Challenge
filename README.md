@@ -1,173 +1,198 @@
-<div align="center">
+# SupplySentry / GlobalSentry
 
-# 🛡️ GlobalSentry
+SupplySentry is a supply-chain risk intelligence website built for the Google Solution Challenge. It serves a live web dashboard, an India-focused RSS feed, a 3D threat globe, and an Ollama-powered agent pipeline that analyzes supply disruption headlines with local RAG memory.
 
-**Real-time global threat detection across epidemics, climate disasters, and supply chain disruptions — powered by a self-correcting AI pipeline running 100% locally.**
+The current deployment is focused on **Supply-Sentry** for **SDG 12: Responsible Consumption and Production**.
 
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Orchestration-FF6F00?style=for-the-badge)](https://github.com/langchain-ai/langgraph)
-[![Ollama](https://img.shields.io/badge/Ollama-Llama3_Local-000000?style=for-the-badge&logo=llama)](https://ollama.com)
-[![Flutter](https://img.shields.io/badge/Flutter-Mobile_App-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
-[![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC382D?style=for-the-badge)](https://qdrant.tech)
+## What It Does
 
-🏆 **Built for HackXtreme Hackathon** 🏆
+- Tracks supply-chain disruption news from RSS feeds.
+- Runs suspicious headlines through a local LangGraph agent pipeline.
+- Uses Ollama with `llama3` for local analysis, with no cloud LLM key required.
+- Uses Qdrant local storage as RAG memory for past events.
+- Fact-checks and validates claims with DuckDuckGo search through `ddgs`.
+- Serves the website and API from one FastAPI app.
+- Includes a dashboard, pipeline/conveyor view, and 3D globe threat map.
 
-[Architecture](#%EF%B8%8F-architecture) • [Features](#-key-features) • [Quick Start](#-quick-start) • [Tech Stack](#%EF%B8%8F-tech-stack) • [SDG Alignment](#-sdg-alignment)
-
-</div>
-
----
-
-## 🧠 What is GlobalSentry?
-
-GlobalSentry is an **autonomous threat intelligence platform** that ingests live RSS feeds from Indian and global news sources, runs them through a **9-node multi-agent AI pipeline**, and surfaces actionable alerts across three critical domains:
-
-| Mode | Domain | SDG Focus | Example Threats |
-|:---:|:---|:---:|:---|
-| 🩺 **Epi-Sentry** | Public Health | SDG 3 | Cholera outbreaks, Nipah virus clusters, dengue surges |
-| 🌪️ **Eco-Sentry** | Climate & Disasters | SDG 11 & 13 | Floods, earthquakes, cyclones, heatwaves, GLOFs |
-| ♻️ **Supply-Sentry** | Supply Chain | SDG 12 | Port congestion, chip shortages, pharma API disruptions |
-
-> [!IMPORTANT]  
-> **💡 Key Innovation: The Neural Moat**  
-> GlobalSentry's cross-mode correlator detects **cascading risks between domains** that single-domain systems miss.  
-> *Example: A flood in Bangladesh (🌪️ Eco) → triggers cholera outbreak (🩺 Epi) → disrupts garment supply chain (♻️ Supply).*  
-> This convergence detection is powered by cross-domain vector similarity search in Qdrant, making it the platform's core differentiator.
-
----
-
-## 🏗️ Architecture
+## Current Architecture
 
 ```mermaid
 graph TD
-    A[📡 RSS Feeds<br>India & Global] -->|Ingest| B{🧠 9-Node LangGraph Pipeline}
-    
-    subgraph AI Pipeline
-    B1(Profiler) --> B2(Triage)
-    B2 --> B3(RAG Retriever)
-    B3 --> B4(Analyst)
-    B4 --> B5(Neural Moat Correlator)
-    B5 --> B6(Fact-Check Validator)
-    B6 -.->|Reflection Loop| B4
-    B6 --> B7(Notify)
-    B7 --> B8(Archiver)
-    end
-    
-    B -->|Logs & Context| C[(Qdrant Vector DB<br>720+ pts)]
-    C -.->|RAG| B
-    B -->|Saves| D[alerts.json]
-    
-    D --> E[⚡ FastAPI Backend]
-    E --> F[🌐 Web Dashboard]
-    E --> G[📱 Flutter App]
-    E --> H[🌍 3D Threat Globe]
-    E --> I[🎞️ Conveyor Viewer]
+    A[RSS supply feeds] --> B[FastAPI backend]
+    B --> C[Web dashboard]
+    B --> D[3D globe]
+    B --> E[Pipeline conveyor]
+    B --> F[LangGraph agent]
+    F --> G[Ollama llama3]
+    F --> H[Qdrant local memory]
+    F --> I[DDGS validation]
+    F --> J[alerts.json / API response]
 ```
 
-### The 9-Node Pipeline
+## Agent Pipeline
 
-| # | Node | Role | Details |
-|---|------|------|---------|
-| 1 | Profiler | Relevance scoring | Scores news against stakeholder profile (region, role, interests). |
-| 2 | Triage | Threat classifier | Mode-aware YES/NO filter — drops irrelevant noise fast. |
-| 3 | Retriever | RAG context | Queries Qdrant for same-mode historical events. |
-| 4 | Analyst | Deep analysis | Domain expert analysis — outputs severity (1–5) + confidence (0–1). |
-| 5 | Correlator | 🧠 Neural Moat | Cross-mode vector search — finds cascading risks between EPI ↔ ECO ↔ SUPPLY. |
-| 6 | Validator | Fact-checker | Verifies claims via live DuckDuckGo search. |
-| 7 | Retry Counter | Reflection loop | If unverified, routes back to Analyst with new evidence (max 1 retry). |
-| 8 | Notify | Alert dispatcher | Saves structured alert to alerts.json for the web dashboard. |
-| 9 | Archiver | Memory builder | Stores event + metadata in Qdrant for future RAG and correlation. |
+The live agent is in `Radio/sentry.py` and is called by `GlobalSentry-Web/api.py`.
 
----
+| Step | Node | Purpose |
+| --- | --- | --- |
+| 1 | Profiler | Scores relevance against the stakeholder profile. |
+| 2 | Triage | Filters out headlines that are not supply-chain threats. |
+| 3 | Retriever | Looks up related supply events from Qdrant memory. |
+| 4 | Analyst | Produces severity, confidence, and impact analysis. |
+| 5 | Locator | Extracts likely affected geography when possible. |
+| 6 | Correlator | Checks memory for related risks from older stored events. |
+| 7 | Validator | Searches live web results to verify the claim. |
+| 8 | Notify | Formats the alert for the API/dashboard. |
+| 9 | Archiver | Stores the event back into Qdrant memory. |
 
-## ✨ Key Features
-- **🤖 Autonomous Scanning**: Background loop continuously ingests RSS feeds and runs them through the AI pipeline.
-- **🧠 Cross-Domain Correlation**: Neural Moat detects cascading risks across EPI ↔ ECO ↔ SUPPLY domains.
-- **🔄 Self-Correcting Reflection Loop**: Validator can reject an analysis and send it back to the Analyst with new evidence.
-- **🌍 3D Threat Globe**: Interactive Three.js globe showing geo-located threats with severity-colored markers.
-- **🎞️ Live Conveyor View**: Real-time pipeline visualization showing each headline flowing through AI nodes.
-- **📱 Flutter Mobile App**: Cross-platform companion app with alert details, analytics, and pipeline views.
-- **🔒 100% Local**: Runs entirely on local hardware — Ollama (Llama 3), local embeddings, local Qdrant — zero cloud APIs.
+Note: some internal code still has historical hooks for `epi` and `eco`, but the current website and deployment are locked to `supply`.
 
----
+## Project Layout
 
-## 🚀 Quick Start
+```text
+.
+├── GlobalSentry-Web/
+│   ├── api.py                  # FastAPI backend and static website server
+│   ├── requirements.txt        # Web/API dependencies
+│   └── frontend/               # Dashboard, globe, conveyor, CSS, JS
+├── Radio/
+│   ├── sentry.py               # Ollama + LangGraph + Qdrant agent
+│   ├── ingest.py               # RSS ingestion runner
+│   ├── seed_data.py            # Optional memory seeding
+│   └── requirements.txt        # Agent dependencies
+├── Dockerfile                  # Production image for website/backend/agent code
+├── docker-compose.yml          # Website + Ollama deployment
+├── DEPLOYMENT.md               # Server deployment walkthrough
+└── README.md
+```
 
-> [!NOTE]
-> Prerequisites: Make sure you have Python 3.11+, Ollama (with Llama 3), and optionally Flutter installed.
+## Requirements
 
-### 1. Start Ollama
+- Python 3.11+
+- Ollama installed locally or available through Docker Compose
+- `llama3` pulled in Ollama
+- Docker and Docker Compose for server deployment
+
+## Local Development
+
+Install dependencies:
+
+```bash
+cd GlobalSentry-Web
+pip install -r requirements.txt
+
+cd ../Radio
+pip install -r requirements.txt
+```
+
+Start Ollama:
+
 ```bash
 ollama pull llama3
 ollama serve
 ```
 
-### 2. Setup the Agent Engine
-```bash
-cd Radio
-pip install -r requirements.txt
-cp .env.template .env # Edit if needed
-python seed_data.py   # Seeds 18 demo events into Qdrant
-```
+Start the website/backend:
 
-### 3. Start the Web Dashboard
 ```bash
 cd GlobalSentry-Web
-pip install -r requirements.txt
-uvicorn api:app --port 8000
+python -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
-### 4. Access the Platform
-- 🌐 Dashboard: http://localhost:8000
-- 🌍 3D Globe: http://localhost:8000/globe.html
-- 🎞️ Conveyor: http://localhost:8000/conveyor.html
-- 📄 API Docs: http://localhost:8000/api/docs
+Open:
 
-### 5. (Optional) Run the Flutter App:
+- Website: `http://localhost:8000`
+- 3D globe: `http://localhost:8000/globe.html`
+- Conveyor: `http://localhost:8000/conveyor.html`
+- API docs: `http://localhost:8000/api/docs`
+
+## Test The Agent
+
+Trigger a live SupplySentry analysis:
+
 ```bash
-cd global_sentry_app
-flutter pub get
-flutter run
+curl -X POST http://localhost:8000/api/trigger \
+  -H "Content-Type: application/json" \
+  -d '{"headline":"Major port strike disrupts container shipments in Mumbai and delays pharmaceutical exports","mode":"supply"}'
 ```
 
----
+The response should include:
 
-## 🖼️ Gallery
-*(Replace the placeholder links below with actual paths to your screenshots, e.g., ./docs/dashboard.png)*
-<div align="center">
-<img src="https://via.placeholder.com/400x250?text=Web+Dashboard" width="32%" alt="Dashboard" />
-<img src="https://via.placeholder.com/400x250?text=3D+Threat+Globe" width="32%" alt="3D Globe" />
-<img src="https://via.placeholder.com/400x250?text=Pipeline+Conveyor" width="32%" alt="Conveyor" />
-</div>
+```json
+{
+  "status": "analysis_complete",
+  "engine": "live_agent"
+}
+```
 
----
+If Ollama is not running, the backend may fall back to demo/RSS behavior instead of the live agent.
 
-## 🛠️ Tech Stack
+## API Endpoints
 
-| Layer | Technology | Why We Chose It |
-|-------|------------|-----------------|
-| LLM | Ollama + Llama 3 | 100% local, no API keys, fast inference. |
-| Agent Orchestration | LangGraph + LangChain | Stateful multi-agent DAG with conditional routing. |
-| Vector Database | Qdrant (local) | Cosine similarity search, cross-mode correlation. |
-| Embeddings | all-MiniLM-L6-v2 | Local sentence embeddings (384 dim), completely offline. |
-| Backend API | FastAPI + Uvicorn | Async, auto-docs, serves both API and static frontend. |
-| Web Frontend | Vanilla HTML/CSS/JS | Lightweight, no build step, glassmorphism dark theme. |
-| 3D Globe | Three.js + WebGL | Interactive geo-visualization of threats. |
-| Mobile App | Flutter + Dart | Cross-platform companion app. |
-| Web Search | DuckDuckGo (DDGS) | Free, no API key — used by Validator for fact-checking. |
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/status` | Backend and active mode status. |
+| `GET /api/alerts` | Current enriched supply alerts. |
+| `GET /api/feed/supply` | Raw paginated supply RSS feed. |
+| `GET /api/globe-threats` | Threat data for the globe map. |
+| `POST /api/trigger` | Manually run one headline through the agent. |
+| `GET /api/docs` | FastAPI Swagger documentation. |
 
----
+## Docker Deployment
 
-## 🌍 SDG Alignment
-GlobalSentry directly addresses key UN Sustainable Development Goals:
-- 🩺 **SDG 3 (Good Health)**: Epi-Sentry detects disease outbreaks early, enabling faster public health response.
-- 🌪️ **SDG 11 (Sustainable Cities)**: Eco-Sentry monitors climate disasters for urban safety.
-- ♻️ **SDG 12 (Responsible Consumption)**: Supply-Sentry tracks supply chain disruptions and ESG violations.
-- 🌍 **SDG 13 (Climate Action)**: Cross-domain correlation reveals how climate events cascade into health and economic crises.
+The deployment path uses Docker Compose to run:
 
-<br>
-<div align="center">
-<p>Built with ❤️ for <b>HackXtreme</b>.</p>
-<p><i>Because threats don't stay in silos. Neither should intelligence.</i></p>
-</div>
+- `ollama`
+- `ollama-pull`, which pulls the configured model
+- `globalsentry-web`, which serves the FastAPI website and agent backend
+
+Start it on a server:
+
+```bash
+docker compose up -d --build
+```
+
+Then open:
+
+```text
+http://YOUR_SERVER_IP:8000
+```
+
+For the full server walkthrough, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Environment Variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OLLAMA_MODEL` | `llama3` | Ollama model used by the agent. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` locally, `http://ollama:11434` in Docker | Ollama API URL. |
+| `QDRANT_PATH` | `./qdrant_data` locally, `/data/qdrant` in Docker | Local Qdrant persistence path. |
+
+## Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Backend | FastAPI, Uvicorn |
+| Frontend | HTML, CSS, JavaScript |
+| 3D map | Three.js |
+| Agent orchestration | LangGraph, LangChain |
+| Local LLM | Ollama + Llama 3 |
+| Memory | Qdrant local vector storage |
+| Embeddings | `all-MiniLM-L6-v2` |
+| Validation search | DDGS |
+| Deployment | Docker, Docker Compose |
+
+## SDG Alignment
+
+SupplySentry supports **SDG 12: Responsible Consumption and Production** by detecting supply disruptions early, surfacing possible regional impact, and helping users reason about logistics risk, supplier exposure, and continuity planning.
+
+## Status
+
+Current focus:
+
+- Supply-chain intelligence website
+- Local Ollama-powered analysis
+- Qdrant RAG memory
+- Docker deployment
+
+Historical prototype ideas for broader multi-domain monitoring may still exist in some files, but they are not the main deployed experience right now.

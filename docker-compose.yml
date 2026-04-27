@@ -1,0 +1,43 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: llama3
+    volumes:
+      - ollama_models:/root/.ollama
+    entrypoint: /bin/sh
+    command: >
+      -c "until ollama list >/dev/null 2>&1; do sleep 2; done;
+      ollama pull $$OLLAMA_MODEL"
+    restart: "no"
+
+  globalsentry-web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3
+      QDRANT_PATH: /data/qdrant
+      HF_HOME: /data/huggingface
+    volumes:
+      - globalsentry_data:/data
+    ports:
+      - "8000:8000"
+
+volumes:
+  ollama_models:
+  globalsentry_data:

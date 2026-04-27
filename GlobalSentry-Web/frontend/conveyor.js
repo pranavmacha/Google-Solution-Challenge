@@ -117,7 +117,7 @@ function updatePipelineViz(currentAnalysis) {
 // ─── Fetch status from API ───────────────────────────────────────────────────
 async function pollStatus() {
     try {
-        const res = await fetch('http://localhost:8000/api/status');
+        const res = await fetch('/api/status');
         if (!res.ok) return;
         const data = await res.json();
         
@@ -172,7 +172,7 @@ async function pollStatus() {
 
 async function fetchAccepted() {
     try {
-        const res = await fetch('http://localhost:8000/api/alerts?limit=50');
+        const res = await fetch('/api/alerts?limit=50');
         if (!res.ok) return;
         const data = await res.json();
         const container = document.getElementById('list-accepted');
@@ -200,9 +200,9 @@ async function fetchAccepted() {
 
 async function fetchPolledInputs() {
     try {
-        const modes = ['epi', 'eco', 'supply'];
+        const modes = ['supply'];
         
-        const fetchPromises = modes.map(m => fetch(`http://localhost:8000/api/feed/${m}?limit=50`).then(res => res.ok ? res.json() : null));
+        const fetchPromises = modes.map(m => fetch(`/api/feed/${m}?limit=50`).then(res => res.ok ? res.json() : null));
         const results = await Promise.all(fetchPromises);
         
         let allFeeds = [];

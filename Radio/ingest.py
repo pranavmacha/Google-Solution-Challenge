@@ -119,12 +119,12 @@ def process_feed(url: str):
 # ─── Main loop ────────────────────────────────────────────────────────────
 
 def main():
-    print("─────────────────────────────────────────────")
+    print("---------------------------------------------")
     print(f"  GlobalSentry Ingestion Engine")
     print(f"  Mode : {SENTRY_MODE.upper()}-SENTRY")
     print(f"  Feeds: {len(RSS_FEEDS)}")
     print(f"  Poll : every {POLL_INTERVAL}s")
-    print("─────────────────────────────────────────────")
+    print("---------------------------------------------")
 
     init_db()
     cleanup_old_hashes()

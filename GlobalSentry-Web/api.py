@@ -35,10 +35,10 @@ try:
     from sentry import global_sentry_app
     os.chdir(_original_cwd)
     AGENT_AVAILABLE = True
-    print(f"[API] ✅ SupplySentry agent loaded from: {RADIO_DIR}")
+    print(f"[API] SupplySentry agent loaded from: {RADIO_DIR}")
 except Exception as e:
     os.chdir(_original_cwd) if '_original_cwd' in dir() else None
-    print(f"[API] ⚠️ Agent import failed: {e}")
+    print(f"[API] Agent import failed: {e}")
     print(f"[API]    Falling back to RSS-only mode.")
 
 app = FastAPI(
@@ -482,7 +482,7 @@ def run_real_agent_stream(headline: str, mode: str):
                 if _state["current_analysis"] and _state["current_analysis"]["headline"] == headline:
                     _state["current_analysis"]["active_node"] = node_name
 
-        print(f"[API] ✅ Agent stream completed for: {headline[:60]}")
+        print(f"[API] Agent stream completed for: {headline[:60]}")
     except Exception as e:
         import traceback
         print(f"[API] Agent streaming failed: {e}")
@@ -730,10 +730,10 @@ def trigger_analysis(req: TriggerRequest):
         "severity": severity,
         "confidence": confidence,
         "is_verified": is_verified,
-        "source": "Manual Input — Agent Offline",
+        "source": "Manual Input - Agent Offline",
         "timestamp": datetime.utcnow().isoformat(),
         "analysis": mode_analyses[req.mode],
-        "convergence_warning": "⚠️ CONVERGENCE DETECTED: Cross-mode pattern match found in memory." if random.random() > 0.6 else None,
+        "convergence_warning": "CONVERGENCE DETECTED: Cross-mode pattern match found in memory." if random.random() > 0.6 else None,
         "location": "India location not detected",
         "is_raw_feed": False,
     }
@@ -862,7 +862,7 @@ async def autonomous_agent_loop():
                         if hl in _processed_headlines:
                             continue
 
-                        print(f"\n[API] \U0001f575\ufe0f Auto-analyzing [SUPPLY]: {hl[:60]}...")
+                        print(f"\n[API] Auto-analyzing [SUPPLY]: {hl[:60]}...")
 
                         if AGENT_AVAILABLE:
                             _state["current_analysis"] = {"headline": hl, "mode": "supply", "active_node": "profiler"}
@@ -893,7 +893,7 @@ async def autonomous_agent_loop():
                                 "source": feed_item.get("source", "RSS Intelligence Feed"),
                                 "timestamp": datetime.utcnow().isoformat(),
                                 "analysis": analysis_text,
-                                "convergence_warning": "\u26a0\ufe0f SUPPLY CHAIN RISK: Cross-sector disruption pattern detected in intelligence memory." if random.random() > 0.7 else None,
+                                "convergence_warning": "SUPPLY CHAIN RISK: Cross-sector disruption pattern detected in intelligence memory." if random.random() > 0.7 else None,
                                 "location": "India location not detected",
                                 "is_raw_feed": False,
                             }
@@ -902,7 +902,7 @@ async def autonomous_agent_loop():
 
                         _processed_headlines.add(hl)
                         _state["current_analysis"] = None
-                        print(f"[API] \u2705 Analysis complete for: {hl[:50]}...")
+                        print(f"[API] Analysis complete for: {hl[:50]}...")
                         
                         # Pause between analyses
                         await asyncio.sleep(random.uniform(3, 6))
@@ -919,7 +919,7 @@ async def startup_event():
     try:
         if os.path.exists(ALERTS_JSON_PATH):
             os.remove(ALERTS_JSON_PATH)
-            print("[API] 🗑️ Cleared stale alerts.json from previous session.")
+            print("[API] Cleared stale alerts.json from previous session.")
     except Exception as e:
         print(f"[API] Warning: Could not clear alerts.json: {e}")
 
