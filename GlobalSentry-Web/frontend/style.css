@@ -1256,6 +1256,36 @@ body.theme-threat-dark .pillar-threat-ticker::after {
   justify-content: space-between;
   gap: 14px;
 }
+.feed-intake-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.feed-reset-btn {
+  height: 30px;
+  border: 1px solid rgba(248,113,113,0.38);
+  border-radius: 8px;
+  background: rgba(248,113,113,0.08);
+  color: #fca5a5;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.feed-reset-btn:hover:not(:disabled) {
+  background: rgba(248,113,113,0.16);
+  border-color: rgba(248,113,113,0.62);
+  color: #fecaca;
+}
+.feed-reset-btn:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
 .feed-intake-switch {
   position: relative;
   display: inline-flex;

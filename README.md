@@ -178,6 +178,7 @@ For the full server walkthrough, see [DEPLOYMENT.md](DEPLOYMENT.md).
 | `OLLAMA_MODEL` | `llama3` | Ollama model used by the agent. |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` locally, `http://ollama:11434` in Docker | Ollama API URL. |
 | `QDRANT_PATH` | `./qdrant_data` locally, `/data/qdrant` in Docker | Local Qdrant persistence path. |
+| `RESET_DEMO_STATE_ON_START` | `false` | Set to `true` before a judge/demo deploy to clear `alerts.json` and Qdrant memory on startup. |
 
 ## Tech Stack
 

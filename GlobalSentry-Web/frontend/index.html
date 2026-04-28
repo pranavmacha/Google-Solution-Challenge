@@ -321,10 +321,13 @@
               <h4 class="sidebar-card-title">Feed Intake</h4>
               <p class="sidebar-card-desc">Controls automatic RSS headlines entering the agent pipeline.</p>
             </div>
-            <label class="feed-intake-switch" for="feed-intake-toggle" title="Toggle automatic feed-to-agent intake">
-              <input type="checkbox" id="feed-intake-toggle" onchange="toggleFeedPolling(this.checked)" />
-              <span class="feed-intake-slider"></span>
-            </label>
+            <div class="feed-intake-actions">
+              <button class="feed-reset-btn" id="btn-reset-demo-state" onclick="resetDemoState()" title="Clear alerts and RAG memory">Reset Data</button>
+              <label class="feed-intake-switch" for="feed-intake-toggle" title="Toggle automatic feed-to-agent intake">
+                <input type="checkbox" id="feed-intake-toggle" onchange="toggleFeedPolling(this.checked)" />
+                <span class="feed-intake-slider"></span>
+              </label>
+            </div>
           </div>
           <div class="feed-intake-state paused" id="feed-intake-state">Paused - agents ready</div>
         </div>

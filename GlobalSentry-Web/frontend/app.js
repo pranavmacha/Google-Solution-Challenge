@@ -101,7 +101,7 @@ async function loadAlerts(mode) {
     try {
       const resp = await fetch(`${API_BASE}/alerts?mode=${mode}&limit=50`);
       const data = await resp.json();
-      // Show real Indian RSS feed items plus agent-processed real-feed alerts.
+      // Show only verified agent threats. Raw RSS feeds are intake, not dashboard alerts.
       alerts = data.alerts || [];
     } catch (e) {
       console.warn('API error', e);
@@ -119,7 +119,7 @@ function renderAlerts(alerts) {
   container.innerHTML = '';
 
   if (!alerts.length) {
-    container.innerHTML = '<div class="alert-loading"><span>No alerts in this mode.</span></div>';
+    container.innerHTML = '<div class="alert-loading"><span>No verified threats yet.</span></div>';
     return;
   }
 
@@ -296,6 +296,41 @@ async function toggleFeedPolling(enabled) {
     console.warn('Failed to toggle feed intake', e);
     updateFeedPollingUI(state.feedPollingEnabled, state.feedPollingEnabled ? 'running' : 'paused');
     showToast('Could not update feed intake', 'error');
+  }
+}
+
+async function resetDemoState() {
+  const btn = document.getElementById('btn-reset-demo-state');
+  const confirmed = window.confirm('Reset dashboard alerts and RAG memory? Feed intake will be paused until you turn it on again.');
+  if (!confirmed) return;
+
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Resetting...';
+    }
+
+    const resp = await fetch(`${API_BASE}/reset-demo-state`, { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Reset failed');
+
+    state.alerts = [];
+    renderAlerts([]);
+    checkConvergence([]);
+    updateMiniStats();
+    updateFeedPollingUI(false, 'paused');
+    updateAutonomousUI(null, false);
+    await loadThreatCounts();
+
+    showToast('Demo data reset. Turn Feed Intake on for fresh RSS.', 'success');
+  } catch (e) {
+    console.warn('Failed to reset demo state', e);
+    showToast('Could not reset demo data', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Reset Data';
+    }
   }
 }
 
