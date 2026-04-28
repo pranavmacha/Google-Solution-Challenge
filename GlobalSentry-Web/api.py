@@ -121,6 +121,69 @@ ACTION_BY_CATEGORY = {
     "General India Supply Risk": "Monitor affected Indian region, supplier exposure, and inventory buffer requirements.",
 }
 
+ACTION_RULES = [
+    (
+        ("aircraft", "airport", "airline", "aviation", "taxiway", "spicejet", "akasa"),
+        "Check air-cargo and passenger-routing exposure, confirm airport delay notices, and shift urgent shipments to alternate hubs if ground congestion grows.",
+    ),
+    (
+        ("refiner", "refinery", "refiners", "maintenance shutdown", "fuel availability"),
+        "Confirm refinery maintenance deferral timelines, watch regional fuel allocation, and protect transport contracts that depend on uninterrupted diesel supply.",
+    ),
+    (
+        ("fuel shortage", "production line", "production lines", "industrial heartland", "manufacturing hub"),
+        "Prioritize fuel allocation for critical suppliers, confirm production restart timelines, and prepare alternate capacity for delayed manufacturing orders.",
+    ),
+    (
+        ("anchor off", "anchored off", "sikka", "paradip"),
+        "Check discharge readiness at the named ports, confirm storage and customs capacity, and prepare alternate berthing plans if tanker clearance slows.",
+    ),
+    (
+        ("heading towards", "east coast", "first import"),
+        "Track tanker ETA and sanctions-compliance checks, confirm receiving-port readiness, and model short-term crude supply impact before arrival.",
+    ),
+    (
+        ("hormuz", "iran", "tehran", "gulf", "crude", "oil", "tanker"),
+        "Review energy and shipping exposure on Gulf-linked routes, confirm carrier insurance status, and line up alternate crude or fuel supply windows.",
+    ),
+    (
+        ("bullion", "gold", "precious metal"),
+        "Validate import approvals and customs documentation, monitor bank authorization timelines, and prepare alternate procurement windows if clearance slips.",
+    ),
+    (
+        ("dgft", "export realisation", "export realization", "exporter", "exports"),
+        "Check exporter payment timelines and DGFT compliance exposure, then update cash-flow and shipment-risk assumptions for affected suppliers.",
+    ),
+    (
+        ("rbi", "inflation", "trade deficit", "currency", "forex"),
+        "Recalculate landed-cost exposure under the latest macro signal, watch FX-sensitive suppliers, and protect near-term purchase commitments.",
+    ),
+    (
+        ("container", "port", "ship", "vessel", "freight", "logistics", "clearance", "congestion"),
+        "Check the specific port or carrier lane, reserve backup routing capacity, and monitor customs or berth-delay updates every 12 hours.",
+    ),
+    (
+        ("semiconductor", "chip", "electronics", "nvidia", "component"),
+        "Review electronics component lead times, identify substitute suppliers, and protect inventory for high-priority customer orders.",
+    ),
+    (
+        ("pharma", "api", "drug", "medicine", "chemical"),
+        "Review API and chemical supplier dependency, confirm available safety stock, and shortlist qualified alternate domestic vendors.",
+    ),
+    (
+        ("food", "grain", "rice", "wheat", "sugar", "onion", "fertilizer"),
+        "Monitor commodity availability and regional price movement, then adjust procurement timing before spot-market pressure rises.",
+    ),
+    (
+        ("factory", "plant", "manufacturing", "production", "shutdown", "strike", "labor", "unrest"),
+        "Contact exposed suppliers for production status, estimate order-delay risk, and prepare alternate capacity for urgent SKUs.",
+    ),
+    (
+        ("tariff", "duty", "sanction", "regulation", "policy", "customs", "ban"),
+        "Review policy and customs exposure, update landed-cost estimates, and flag shipments that may need revised documentation.",
+    ),
+]
+
 
 def _combined_text(alert: dict) -> str:
     return " ".join(str(alert.get(k, "")) for k in ("headline", "analysis", "summary", "source")).lower()
@@ -154,11 +217,21 @@ def estimate_india_supply_signal(alert: dict) -> int:
     return min(5, score)
 
 
+def recommend_action(alert: dict, category: str) -> str:
+    text = _combined_text(alert)
+    for keywords, action in ACTION_RULES:
+        if any(keyword in text for keyword in keywords):
+            location = alert.get("location")
+            if location and location not in {"Unknown", "India location not detected"}:
+                return f"{action} Focus first on exposure around {location}."
+            return action
+    return ACTION_BY_CATEGORY.get(category, ACTION_BY_CATEGORY["General India Supply Risk"])
+
+
 def enrich_india_alert(alert: dict) -> dict:
     enriched = dict(alert)
     category = enriched.get("category") or classify_india_category(enriched)
     enriched["category"] = category
-    enriched["recommended_action"] = enriched.get("recommended_action") or ACTION_BY_CATEGORY.get(category, ACTION_BY_CATEGORY["General India Supply Risk"])
     enriched["evidence"] = {
         "source": enriched.get("source", "Live RSS feed"),
         "source_url": enriched.get("source_url") or enriched.get("url") or enriched.get("link"),
@@ -176,6 +249,8 @@ def enrich_india_alert(alert: dict) -> dict:
         enriched.update(geo)
     elif enriched.get("lat") and enriched.get("lng") and not enriched.get("location"):
         enriched["location"] = "India"
+
+    enriched["recommended_action"] = recommend_action(enriched, category)
 
     if enriched.get("is_raw_feed"):
         signal = estimate_india_supply_signal(enriched)
