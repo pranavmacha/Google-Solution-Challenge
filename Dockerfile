@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    LLM_PROVIDER=groq \
+    GROQ_MODEL=llama-3.1-8b-instant \
+    EMBEDDINGS_PROVIDER=hash \
     OLLAMA_BASE_URL=http://ollama:11434 \
     OLLAMA_MODEL=llama3 \
     QDRANT_PATH=/data/qdrant
@@ -24,4 +27,4 @@ COPY Radio ./Radio
 EXPOSE 8000
 
 WORKDIR /app/GlobalSentry-Web
-CMD ["python", "-m", "uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "python -m uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}"]

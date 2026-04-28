@@ -11,34 +11,111 @@ warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed fi
 from typing import TypedDict, List, Literal
 from langgraph.graph import StateGraph, END
 from langchain_ollama import ChatOllama
-from langchain_community.embeddings import SentenceTransformerEmbeddings
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import (
     Distance, PointStruct, VectorParams, Filter, FieldCondition, MatchAny, MatchValue
 )
 from dotenv import load_dotenv
 
+RADIO_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.normpath(os.path.join(RADIO_DIR, ".."))
+
 try:
-    load_dotenv(override=True)
+    load_dotenv(os.path.join(REPO_ROOT, ".env"), override=False)
+    load_dotenv(os.path.join(RADIO_DIR, ".env"), override=False)
 except UnicodeDecodeError:
     print("[Warning] Could not load .env due to encoding issue (UTF-16 BOM). Skipping.")
 
 # ─── Infrastructure ────────────────────────────────────────────────────────
 
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
 OLLAMA_MODEL   = os.getenv("OLLAMA_MODEL", "llama3")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "sentence-transformers").strip().lower()
+
+def get_llm(model_name: str | None = None):
+    """Create the configured chat model.
+
+    LLM_PROVIDER=ollama keeps the local demo path.
+    LLM_PROVIDER=groq uses GROQ_API_KEY for cloud deployment.
+    """
+    provider = os.getenv("LLM_PROVIDER", LLM_PROVIDER).strip().lower()
+
+    if provider == "groq":
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError("LLM_PROVIDER=groq requires GROQ_API_KEY in the environment.")
+        try:
+            from langchain_groq import ChatGroq
+        except ImportError as exc:
+            raise RuntimeError("Install langchain-groq to use LLM_PROVIDER=groq.") from exc
+        return ChatGroq(
+            model=model_name or os.getenv("GROQ_MODEL", GROQ_MODEL),
+            api_key=api_key,
+            temperature=0,
+        )
+
+    if provider == "ollama":
+        return ChatOllama(
+            model=model_name or os.getenv("OLLAMA_MODEL", OLLAMA_MODEL),
+            base_url=os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL),
+        )
+
+    raise RuntimeError(f"Unsupported LLM_PROVIDER '{provider}'. Use 'ollama' or 'groq'.")
+
 
 # Agent A — Triage (speed matters, same model)
-triage_llm  = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+triage_llm  = get_llm(GROQ_MODEL if LLM_PROVIDER == "groq" else OLLAMA_MODEL)
 # Agent B — Analyst (depth matters)
-analyst_llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+analyst_llm = get_llm(GROQ_MODEL if LLM_PROVIDER == "groq" else OLLAMA_MODEL)
 
-# Local embeddings — no API key required
-embeddings = SentenceTransformerEmbeddings(model_name=EMBEDDING_MODEL)
+class HashEmbeddings:
+    """Tiny deterministic embeddings for low-memory deployments.
 
-print(f"[GlobalSentry] Ollama model : {OLLAMA_MODEL} @ {OLLAMA_BASE_URL}")
-print(f"[GlobalSentry] Embeddings   : {EMBEDDING_MODEL}")
+    This avoids loading Torch/sentence-transformers on Render's 512 MiB tier.
+    The vectors are not semantic like MiniLM, but they preserve enough keyword
+    overlap for demo memory lookup without blowing up the container.
+    """
+
+    def __init__(self, size: int = 384):
+        self.size = size
+
+    def embed_query(self, text: str) -> list[float]:
+        vector = [0.0] * self.size
+        tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
+        for token in tokens:
+            digest = uuid.uuid5(uuid.NAMESPACE_DNS, token).int
+            index = digest % self.size
+            sign = 1.0 if (digest >> 8) & 1 else -1.0
+            vector[index] += sign
+        norm = sum(value * value for value in vector) ** 0.5 or 1.0
+        return [value / norm for value in vector]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_query(text) for text in texts]
+
+
+def get_embeddings():
+    if EMBEDDINGS_PROVIDER in {"hash", "hashed", "lightweight"}:
+        print("[GlobalSentry] Embeddings   : hash-384 (low-memory)")
+        return HashEmbeddings(size=VECTOR_SIZE)
+
+    try:
+        from langchain_community.embeddings import SentenceTransformerEmbeddings
+    except ImportError as exc:
+        raise RuntimeError(
+            "Install sentence-transformers or set EMBEDDINGS_PROVIDER=hash."
+        ) from exc
+
+    print(f"[GlobalSentry] Embeddings   : {EMBEDDING_MODEL}")
+    return SentenceTransformerEmbeddings(model_name=EMBEDDING_MODEL)
+
+if LLM_PROVIDER == "groq":
+    print(f"[GlobalSentry] LLM provider : groq ({GROQ_MODEL})")
+else:
+    print(f"[GlobalSentry] LLM provider : ollama ({OLLAMA_MODEL} @ {OLLAMA_BASE_URL})")
 
 # ─── DuckDuckGo Search ────────────────────────────────────────────────────
 
@@ -66,6 +143,14 @@ COLLECTION_NAME = "global_sentry_memory"
 VECTOR_SIZE     = 384           # all-MiniLM-L6-v2 dimension
 
 _qdrant_client = None  # lazy singleton
+_embeddings = None
+
+
+def get_embedding_model():
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = get_embeddings()
+    return _embeddings
 
 def get_qdrant_client() -> QdrantClient:
     """Returns a lazily-initialized QdrantClient singleton."""
@@ -91,7 +176,7 @@ def query_memory(query_text: str, *, limit: int, query_filter: Filter | None = N
     The LangChain Qdrant wrapper still calls QdrantClient.search(), which was
     removed in newer qdrant-client versions. Use query_points() directly.
     """
-    query_vector = embeddings.embed_query(query_text)
+    query_vector = get_embedding_model().embed_query(query_text)
     response = get_qdrant_client().query_points(
         collection_name=COLLECTION_NAME,
         query=query_vector,
@@ -105,7 +190,7 @@ def query_memory(query_text: str, *, limit: int, query_filter: Filter | None = N
 
 def upsert_memory(text: str, metadata: dict):
     payload = {"text": text, **metadata}
-    vector = embeddings.embed_query(text)
+    vector = get_embedding_model().embed_query(text)
     get_qdrant_client().upsert(
         collection_name=COLLECTION_NAME,
         points=[

@@ -1,16 +1,33 @@
-# global_sentry_app
+# GlobalSentry App
 
-A new Flutter project.
+Flutter companion app for the GlobalSentry web dashboard.
 
-## Getting Started
+The web dashboard runs the analysis pipeline. This Flutter app only reads the
+verified threat APIs and displays:
 
-This project is a starting point for a Flutter application.
+- a verified threat feed
+- a satellite map with geocoded threat pins, matching the website map style
+- threat detail pages with confidence, source, location, and recommended action
 
-A few resources to get you started if this is your first Flutter project:
+The map uses Esri World Imagery with Carto labels through `flutter_map`, so the
+mobile view follows the same visual language as `GlobalSentry-Web/frontend/globe.html`.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## API
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+By default the app targets the deployed Render backend:
+
+```txt
+https://google-solution-challenge-u4m1.onrender.com/api
+```
+
+For local backend testing on Android emulator:
+
+```sh
+flutter run --dart-define=GLOBALSENTRY_API_BASE=http://10.0.2.2:8000/api
+```
+
+For Windows desktop or web, point it at the host API:
+
+```sh
+flutter run --dart-define=GLOBALSENTRY_API_BASE=http://localhost:8000/api
+```

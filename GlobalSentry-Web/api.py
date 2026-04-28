@@ -14,6 +14,7 @@ import hashlib
 import feedparser
 import asyncio
 import re
+import shutil
 from datetime import datetime, timedelta
 from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException
@@ -120,6 +121,69 @@ ACTION_BY_CATEGORY = {
     "General India Supply Risk": "Monitor affected Indian region, supplier exposure, and inventory buffer requirements.",
 }
 
+ACTION_RULES = [
+    (
+        ("aircraft", "airport", "airline", "aviation", "taxiway", "spicejet", "akasa"),
+        "Check air-cargo and passenger-routing exposure, confirm airport delay notices, and shift urgent shipments to alternate hubs if ground congestion grows.",
+    ),
+    (
+        ("refiner", "refinery", "refiners", "maintenance shutdown", "fuel availability"),
+        "Confirm refinery maintenance deferral timelines, watch regional fuel allocation, and protect transport contracts that depend on uninterrupted diesel supply.",
+    ),
+    (
+        ("fuel shortage", "production line", "production lines", "industrial heartland", "manufacturing hub"),
+        "Prioritize fuel allocation for critical suppliers, confirm production restart timelines, and prepare alternate capacity for delayed manufacturing orders.",
+    ),
+    (
+        ("anchor off", "anchored off", "sikka", "paradip"),
+        "Check discharge readiness at the named ports, confirm storage and customs capacity, and prepare alternate berthing plans if tanker clearance slows.",
+    ),
+    (
+        ("heading towards", "east coast", "first import"),
+        "Track tanker ETA and sanctions-compliance checks, confirm receiving-port readiness, and model short-term crude supply impact before arrival.",
+    ),
+    (
+        ("hormuz", "iran", "tehran", "gulf", "crude", "oil", "tanker"),
+        "Review energy and shipping exposure on Gulf-linked routes, confirm carrier insurance status, and line up alternate crude or fuel supply windows.",
+    ),
+    (
+        ("bullion", "gold", "precious metal"),
+        "Validate import approvals and customs documentation, monitor bank authorization timelines, and prepare alternate procurement windows if clearance slips.",
+    ),
+    (
+        ("dgft", "export realisation", "export realization", "exporter", "exports"),
+        "Check exporter payment timelines and DGFT compliance exposure, then update cash-flow and shipment-risk assumptions for affected suppliers.",
+    ),
+    (
+        ("rbi", "inflation", "trade deficit", "currency", "forex"),
+        "Recalculate landed-cost exposure under the latest macro signal, watch FX-sensitive suppliers, and protect near-term purchase commitments.",
+    ),
+    (
+        ("container", "port", "ship", "vessel", "freight", "logistics", "clearance", "congestion"),
+        "Check the specific port or carrier lane, reserve backup routing capacity, and monitor customs or berth-delay updates every 12 hours.",
+    ),
+    (
+        ("semiconductor", "chip", "electronics", "nvidia", "component"),
+        "Review electronics component lead times, identify substitute suppliers, and protect inventory for high-priority customer orders.",
+    ),
+    (
+        ("pharma", "api", "drug", "medicine", "chemical"),
+        "Review API and chemical supplier dependency, confirm available safety stock, and shortlist qualified alternate domestic vendors.",
+    ),
+    (
+        ("food", "grain", "rice", "wheat", "sugar", "onion", "fertilizer"),
+        "Monitor commodity availability and regional price movement, then adjust procurement timing before spot-market pressure rises.",
+    ),
+    (
+        ("factory", "plant", "manufacturing", "production", "shutdown", "strike", "labor", "unrest"),
+        "Contact exposed suppliers for production status, estimate order-delay risk, and prepare alternate capacity for urgent SKUs.",
+    ),
+    (
+        ("tariff", "duty", "sanction", "regulation", "policy", "customs", "ban"),
+        "Review policy and customs exposure, update landed-cost estimates, and flag shipments that may need revised documentation.",
+    ),
+]
+
 
 def _combined_text(alert: dict) -> str:
     return " ".join(str(alert.get(k, "")) for k in ("headline", "analysis", "summary", "source")).lower()
@@ -153,11 +217,21 @@ def estimate_india_supply_signal(alert: dict) -> int:
     return min(5, score)
 
 
+def recommend_action(alert: dict, category: str) -> str:
+    text = _combined_text(alert)
+    for keywords, action in ACTION_RULES:
+        if any(keyword in text for keyword in keywords):
+            location = alert.get("location")
+            if location and location not in {"Unknown", "India location not detected"}:
+                return f"{action} Focus first on exposure around {location}."
+            return action
+    return ACTION_BY_CATEGORY.get(category, ACTION_BY_CATEGORY["General India Supply Risk"])
+
+
 def enrich_india_alert(alert: dict) -> dict:
     enriched = dict(alert)
     category = enriched.get("category") or classify_india_category(enriched)
     enriched["category"] = category
-    enriched["recommended_action"] = enriched.get("recommended_action") or ACTION_BY_CATEGORY.get(category, ACTION_BY_CATEGORY["General India Supply Risk"])
     enriched["evidence"] = {
         "source": enriched.get("source", "Live RSS feed"),
         "source_url": enriched.get("source_url") or enriched.get("url") or enriched.get("link"),
@@ -175,6 +249,8 @@ def enrich_india_alert(alert: dict) -> dict:
         enriched.update(geo)
     elif enriched.get("lat") and enriched.get("lng") and not enriched.get("location"):
         enriched["location"] = "India"
+
+    enriched["recommended_action"] = recommend_action(enriched, category)
 
     if enriched.get("is_raw_feed"):
         signal = estimate_india_supply_signal(enriched)
@@ -398,10 +474,10 @@ def fetch_rss_alerts(mode: str) -> list:
     return unique
 
 
-def get_cached_rss(mode: str) -> list:
+def get_cached_rss(mode: str, allow_refresh: bool = True) -> list:
     """Returns cached RSS alerts, refreshing if stale."""
     now = time.time()
-    if _rss_cache["last_fetch"] is None or (now - _rss_cache["last_fetch"]) > RSS_CACHE_TTL:
+    if allow_refresh and (_rss_cache["last_fetch"] is None or (now - _rss_cache["last_fetch"]) > RSS_CACHE_TTL):
         print(f"[RSS] Refreshing supply feeds...")
         _rss_cache["supply"] = fetch_rss_alerts("supply")
         _rss_cache["last_fetch"] = now
@@ -416,7 +492,9 @@ def get_cached_rss(mode: str) -> list:
 _state = {
     "active_mode": "supply",
     "last_poll": datetime.utcnow().isoformat(),
-    "feed_health": {"supply": "OK"},
+    "feed_health": {"supply": "PAUSED"},
+    "feed_polling_enabled": False,
+    "feed_cache_locked_until_start": False,
     "triggered_analyses": [],
     "agent_available": AGENT_AVAILABLE,
     "current_analysis": None,
@@ -431,9 +509,81 @@ class TriggerRequest(BaseModel):
     headline: str
     mode: Literal["supply"] = "supply"
 
+
+class FeedPollingRequest(BaseModel):
+    enabled: bool
+
 # ─── Live Alert Store (from agent pipeline) ───────────────────────────────────
 
 ALERTS_JSON_PATH = os.path.join(RADIO_DIR, "alerts.json")
+
+def env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_qdrant_storage_path() -> str:
+    raw_path = os.getenv("QDRANT_PATH")
+    if not raw_path:
+        return os.path.join(RADIO_DIR, "qdrant_data")
+    if os.path.isabs(raw_path):
+        return raw_path
+    return os.path.normpath(os.path.join(RADIO_DIR, raw_path))
+
+
+def reset_demo_storage() -> dict:
+    """Clear persisted demo state and reset the RAG memory collection."""
+    cleared = {"alerts_json": False, "qdrant_memory": False}
+
+    if os.path.exists(ALERTS_JSON_PATH):
+        os.remove(ALERTS_JSON_PATH)
+        cleared["alerts_json"] = True
+        print("[API] Cleared alerts.json.")
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(RADIO_DIR)
+        from sentry import COLLECTION_NAME, VECTOR_SIZE, get_qdrant_client
+        from qdrant_client.http.models import Distance, VectorParams
+
+        client = get_qdrant_client()
+        collections = client.get_collections().collections
+        if any(c.name == COLLECTION_NAME for c in collections):
+            client.delete_collection(collection_name=COLLECTION_NAME)
+        client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+        )
+        cleared["qdrant_memory"] = True
+        print(f"[API] Reset Qdrant memory collection: {COLLECTION_NAME}")
+        return cleared
+    except Exception as e:
+        print(f"[API] Qdrant collection reset failed, trying storage cleanup: {e}")
+    finally:
+        os.chdir(original_cwd)
+
+    qdrant_path = get_qdrant_storage_path()
+    if os.path.exists(qdrant_path):
+        shutil.rmtree(qdrant_path)
+        cleared["qdrant_memory"] = True
+        print(f"[API] Cleared Qdrant memory at: {qdrant_path}")
+    return cleared
+
+
+def reset_runtime_state(lock_feed_cache: bool = True) -> None:
+    """Clear in-memory dashboard state and pause automatic intake."""
+    _state["feed_polling_enabled"] = False
+    _state["feed_cache_locked_until_start"] = lock_feed_cache
+    _state["feed_health"]["supply"] = "PAUSED"
+    _state["current_analysis"] = None
+    _state["triggered_analyses"].clear()
+    _state["recent_rejections"].clear()
+    _state["last_poll"] = datetime.utcnow().isoformat()
+    _processed_headlines.clear()
+    _rss_cache["supply"] = []
+    _rss_cache["last_fetch"] = None
 
 def load_live_alerts() -> list:
     """Reads alerts.json written by the agent's notify_node."""
@@ -577,24 +727,20 @@ def root():
 
 @app.get("/api/alerts")
 def get_alerts(mode: Optional[str] = None, limit: int = 15):
-    """Returns supply chain alerts — processed (agent) AND raw RSS feed headlines."""
+    """Returns visible dashboard alerts from the agent pipeline only."""
     if mode and mode != "supply":
         raise HTTPException(status_code=400, detail="Invalid mode. Only 'supply' is supported.")
 
-    # 1. Agent-processed + manually-triggered alerts
-    all_alerts = load_live_alerts() + _state["triggered_analyses"]
-
-    # 2. Also include RSS feed headlines so content appears immediately
-    #    (before the autonomous loop has processed them)
-    modes_to_fetch = ["supply"]
-    for m in modes_to_fetch:
-        rss_items = get_cached_rss(m)
-        all_alerts.extend(rss_items)
+    all_alerts = [
+        enrich_india_alert(alert)
+        for alert in load_live_alerts() + _state["triggered_analyses"]
+        if not alert.get("is_raw_feed") and alert.get("is_verified")
+    ]
 
     if mode:
         all_alerts = [a for a in all_alerts if a.get("mode") == mode]
 
-    # Deduplicate by headline (processed alerts take priority since they appear first)
+    # Deduplicate by headline in case a manual trigger and background scan hit the same item.
     seen = set()
     unique = []
     for a in all_alerts:
@@ -604,9 +750,12 @@ def get_alerts(mode: Optional[str] = None, limit: int = 15):
 
     unique.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
 
-    unique = [enrich_india_alert(a) for a in unique]
-
-    return {"alerts": unique[:limit], "total": len(unique), "mode_filter": mode}
+    return {
+        "alerts": unique[:limit],
+        "total": len(unique),
+        "mode_filter": mode,
+        "visibility": "verified_agent_threats_only",
+    }
 
 
 @app.get("/api/feed/{mode}")
@@ -615,7 +764,7 @@ def get_raw_feed(mode: str, page: int = 1, per_page: int = 15):
     if mode != "supply":
         raise HTTPException(status_code=400, detail="Invalid mode. Only 'supply' is supported.")
     
-    alerts = get_cached_rss(mode)
+    alerts = get_cached_rss(mode, allow_refresh=not _state["feed_cache_locked_until_start"])
     total = len(alerts)
     total_pages = (total + per_page - 1) // per_page  # ceiling division
     start = (page - 1) * per_page
@@ -639,7 +788,7 @@ def get_threat_counts():
     plus how many have been processed by the agent so far."""
     counts = {}
     processed_alerts = load_live_alerts() + _state["triggered_analyses"]
-    feed_items = get_cached_rss("supply")
+    feed_items = get_cached_rss("supply", allow_refresh=not _state["feed_cache_locked_until_start"])
     processed_count = len([a for a in processed_alerts if a.get("mode") == "supply" and not a.get("is_raw_feed")])
     counts["supply"] = {
         "total": len(feed_items),
@@ -651,20 +800,19 @@ def get_threat_counts():
 
 @app.get("/api/globe-threats")
 def get_globe_threats():
-    """Returns real India feed alerts with geo-coordinates for globe visualization."""
+    """Returns verified agent alerts with geo-coordinates for globe visualization."""
     all_threats = []
 
-    # Agent-processed and triggered real feed alerts.
+    # Only plot agent-processed, verified alerts. Raw RSS items can contain
+    # locations, but they should not appear as map threats before verification.
     for alert in load_live_alerts() + _state["triggered_analyses"]:
         enriched = enrich_india_alert(alert)
-        if enriched.get("lat") and enriched.get("lng"):
-            all_threats.append(enriched)
-
-    # Raw RSS items are real feed items too. Only map them when an India
-    # location is detected; otherwise they stay in the dashboard feed.
-    for alert in get_cached_rss("supply"):
-        enriched = enrich_india_alert(alert)
-        if enriched.get("lat") and enriched.get("lng") and enriched.get("supply_signal_score", 0) > 0:
+        if (
+            not enriched.get("is_raw_feed")
+            and enriched.get("is_verified")
+            and enriched.get("lat")
+            and enriched.get("lng")
+        ):
             all_threats.append(enriched)
 
     # Deduplicate by ID
@@ -679,7 +827,7 @@ def get_globe_threats():
         "threats": unique_threats,
         "total": len(unique_threats),
         "region_focus": USER_PROFILE["region_of_interest"],
-        "map_policy": "Only real India feed alerts with detected locations are plotted.",
+        "map_policy": "Only verified agent threats with detected locations are plotted.",
     }
 
 
@@ -751,13 +899,17 @@ def trigger_analysis(req: TriggerRequest):
 @app.get("/api/status")
 def get_status():
     """Returns system status including the current real-time analysis."""
-    rss_counts = {"supply": len(get_cached_rss("supply"))}
+    rss_counts = {"supply": len(get_cached_rss("supply", allow_refresh=False))}
     live_count = len(load_live_alerts())
+    feed_polling_enabled = _state["feed_polling_enabled"]
 
     return {
         "active_mode": _state["active_mode"],
         "last_poll": _state["last_poll"],
         "feed_health": _state["feed_health"],
+        "feed_polling_enabled": feed_polling_enabled,
+        "feed_polling_state": "running" if feed_polling_enabled else "paused",
+        "feed_cache_locked_until_start": _state["feed_cache_locked_until_start"],
         "agent_available": AGENT_AVAILABLE,
         "rss_headlines": rss_counts,
         "agent_processed_alerts": live_count,
@@ -767,8 +919,49 @@ def get_status():
             "profiler", "triage", "retriever", "analyst", "locator",
             "correlator", "validator", "retry", "notify", "archiver"
         ],
-        "data_source": "Live Indian RSS feeds -> Autonomous AI",
+        "data_source": "Live Indian RSS feeds -> Autonomous AI" if feed_polling_enabled else "Feed intake paused; manual agent trigger available",
         "version": "3.0.0",
+    }
+
+
+@app.put("/api/feed-polling")
+def set_feed_polling(req: FeedPollingRequest):
+    """Enable or pause automatic RSS-to-agent intake without stopping the agent."""
+    _state["feed_polling_enabled"] = req.enabled
+    if req.enabled:
+        _state["feed_cache_locked_until_start"] = False
+    _state["feed_health"]["supply"] = "OK" if req.enabled else "PAUSED"
+    if not req.enabled:
+        _state["current_analysis"] = None
+    return {
+        "feed_polling_enabled": _state["feed_polling_enabled"],
+        "feed_polling_state": "running" if req.enabled else "paused",
+        "changed_at": datetime.utcnow().isoformat(),
+        "message": (
+            "Automatic feed intake is running. RSS headlines can enter the agent pipeline."
+            if req.enabled
+            else "Automatic feed intake is paused. Agents remain available for manual triggers."
+        ),
+    }
+
+
+@app.post("/api/reset-demo-state")
+def reset_demo_state():
+    """Reset alerts, RSS cache, and RAG memory for a clean demo state."""
+    storage = reset_demo_storage()
+    reset_runtime_state(lock_feed_cache=True)
+    return {
+        "status": "reset_complete",
+        "feed_polling_enabled": False,
+        "feed_polling_state": "paused",
+        "feed_cache_locked_until_start": True,
+        "cleared": {
+            "runtime_state": True,
+            "rss_cache": True,
+            **storage,
+        },
+        "reset_at": datetime.utcnow().isoformat(),
+        "message": "Demo data reset. Turn Feed Intake on to fetch fresh RSS headlines again.",
     }
 
 
@@ -801,7 +994,7 @@ def get_convergence():
     # Qdrant memory stats
     memory_count = 0
     try:
-        from Radio.sentry import get_qdrant_client, COLLECTION_NAME
+        from sentry import COLLECTION_NAME, get_qdrant_client
         info = get_qdrant_client().get_collection(COLLECTION_NAME)
         memory_count = info.points_count
     except Exception:
@@ -852,6 +1045,15 @@ async def autonomous_agent_loop():
         
     while True:
         try:
+            if not _state["feed_polling_enabled"]:
+                _state["feed_health"]["supply"] = "PAUSED"
+                _state["current_analysis"] = None
+                await asyncio.sleep(2)
+                continue
+
+            _state["feed_health"]["supply"] = "OK"
+            _state["feed_cache_locked_until_start"] = False
+
             # Build queue of unprocessed supply chain headlines
             headlines = get_cached_rss("supply")
             headlines = _prioritize_headlines(headlines)
@@ -915,17 +1117,19 @@ async def autonomous_agent_loop():
 
 @app.on_event("startup")
 async def startup_event():
-    # Clear stale alerts from previous session so the dashboard starts fresh
+    # Clear stale alerts from previous session so the dashboard starts fresh.
+    # Set RESET_DEMO_STATE_ON_START=true to also clear Qdrant/RAG memory.
     try:
-        if os.path.exists(ALERTS_JSON_PATH):
+        if env_bool("RESET_DEMO_STATE_ON_START", False):
+            reset_demo_storage()
+        elif os.path.exists(ALERTS_JSON_PATH):
             os.remove(ALERTS_JSON_PATH)
             print("[API] Cleared stale alerts.json from previous session.")
     except Exception as e:
-        print(f"[API] Warning: Could not clear alerts.json: {e}")
+        print(f"[API] Warning: Could not reset demo storage: {e}")
 
-    # Reset in-memory state
-    _state["triggered_analyses"].clear()
-    _processed_headlines.clear()
+    # Reset in-memory state without hiding the initial live RSS dashboard.
+    reset_runtime_state(lock_feed_cache=False)
 
     # Start the continuous scanner in the background
     asyncio.create_task(autonomous_agent_loop())

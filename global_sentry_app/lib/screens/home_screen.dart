@@ -1,61 +1,100 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../models/threat.dart';
+import '../services/threat_api_client.dart';
 import '../theme/app_theme.dart';
-import '../models/alert.dart';
-import 'dashboard_screen.dart';
-import 'analytics_screen.dart';
-import 'pipeline_screen.dart';
+import 'globe_screen.dart';
+import 'threat_detail_screen.dart';
+import 'threat_feed_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.apiClient});
+
+  final ThreatApiClient? apiClient;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> {
+  late final ThreatApiClient _apiClient;
   int _selectedIndex = 0;
-  SentryMode _sentryMode = SentryMode.eco;
-  late AnimationController _pulseController;
+  bool _isLoading = true;
+  String? _error;
+  List<Threat> _threats = const [];
+  List<Threat> _mappedThreats = const [];
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    _apiClient = widget.apiClient ?? ThreatApiClient();
+    _refreshThreats();
   }
 
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  void _onSentryModeChanged(SentryMode mode) {
+  Future<void> _refreshThreats() async {
     setState(() {
-      _sentryMode = mode;
+      _isLoading = true;
+      _error = null;
     });
+
+    try {
+      final results = await Future.wait([
+        _apiClient.fetchVerifiedThreats(),
+        _apiClient.fetchGlobeThreats(),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _threats = results[0];
+        _mappedThreats = results[1];
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _openThreat(Threat threat) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ThreatDetailScreen(threat: threat),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final existingIds = _threats.map((threat) => threat.id).toSet();
+    final threats = [
+      ..._threats,
+      ..._mappedThreats.where((threat) => !existingIds.contains(threat.id)),
+    ];
+
     return Scaffold(
       backgroundColor: AppTheme.bgDeep,
       appBar: _buildAppBar(),
-      body: Column(
+      body: IndexedStack(
+        index: _selectedIndex,
         children: [
-          _buildSentryModeSwitcher(),
-          Expanded(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: [
-                DashboardScreen(sentryMode: _sentryMode),
-                AnalyticsScreen(sentryMode: _sentryMode),
-                PipelineScreen(),
-              ],
-            ),
+          ThreatFeedScreen(
+            threats: threats,
+            mappedThreats: _mappedThreats,
+            isLoading: _isLoading,
+            error: _error,
+            onRefresh: _refreshThreats,
+            onThreatSelected: _openThreat,
+          ),
+          GlobeScreen(
+            threats: _mappedThreats,
+            isLoading: _isLoading,
+            error: _error,
+            onRefresh: _refreshThreats,
+            onThreatSelected: _openThreat,
           ),
         ],
       ),
@@ -66,29 +105,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: AppTheme.bgCard,
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: AppTheme.borderColor, width: 1),
-          ),
-        ),
-      ),
+      titleSpacing: 16,
       title: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(4),
+            width: 34,
+            height: 34,
+            padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
               color: AppTheme.bgCardLighter,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppTheme.borderColor),
             ),
-            child: Image.asset(
-              'assets/images/logo.png',
-              width: 24,
-              height: 24,
-              fit: BoxFit.contain,
-            ),
+            child: Image.asset('assets/images/logo.png'),
           ),
           const SizedBox(width: 10),
           Column(
@@ -97,18 +128,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Text(
                 'GlobalSentry',
                 style: GoogleFonts.orbitron(
+                  color: AppTheme.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1,
                 ),
               ),
               Text(
-                'Intelligence Platform',
+                'Threat Display',
                 style: GoogleFonts.spaceGrotesk(
-                  fontSize: 10,
-                  color: AppTheme.textSecondary,
-                  letterSpacing: 0.8,
+                  color: AppTheme.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -116,136 +147,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ],
       ),
       actions: [
-        AnimatedBuilder(
-          animation: _pulseController,
-          builder: (context, child) {
-            return Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppTheme.ecoColor.withOpacity(
-                        0.5 + 0.5 * _pulseController.value,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.ecoColor.withOpacity(0.5),
-                          blurRadius: 8,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'LIVE',
-                    style: GoogleFonts.orbitron(
-                      fontSize: 10,
-                      color: AppTheme.ecoColor,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+        Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: _StatusPill(
+            isLoading: _isLoading,
+            hasError: _error != null,
+          ),
+        ),
+        IconButton(
+          tooltip: 'Refresh',
+          icon: const Icon(Icons.refresh_rounded),
+          onPressed: _isLoading ? null : _refreshThreats,
         ),
       ],
-    );
-  }
-
-  Widget _buildSentryModeSwitcher() {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppTheme.bgCard,
-        border: Border(bottom: BorderSide(color: AppTheme.borderColor, width: 0.5)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: [
-            _sentryModeButton(SentryMode.epi, '🩺', 'Epi-Sentry', AppTheme.epiColor, AppTheme.epiGlow),
-            const SizedBox(width: 10),
-            _sentryModeButton(SentryMode.eco, '🌪️', 'Eco-Sentry', AppTheme.ecoColor, AppTheme.ecoGlow),
-            const SizedBox(width: 10),
-            _sentryModeButton(SentryMode.supply, '♻️', 'Supply-Sentry', AppTheme.supplyColor, AppTheme.supplyGlow),
-            const SizedBox(width: 16),
-            Container(width: 1, height: 20, color: AppTheme.borderColor),
-            const SizedBox(width: 16),
-            _buildSdgBadge(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSdgBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCardLighter,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderColor),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.satellite_alt_rounded, size: 12, color: AppTheme.textMuted),
-          const SizedBox(width: 6),
-          Text(
-            'SDG 3·11·12·13',
-            style: GoogleFonts.spaceGrotesk(
-              fontSize: 10,
-              color: AppTheme.textMuted,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sentryModeButton(SentryMode mode, String emoji, String label, Color color, Color glow) {
-    final isActive = _sentryMode == mode;
-    return GestureDetector(
-      onTap: () => _onSentryModeChanged(mode),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive ? glow : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isActive ? color : AppTheme.borderColor,
-            width: 1.5,
-          ),
-          boxShadow: isActive
-              ? [BoxShadow(color: color.withOpacity(0.15), blurRadius: 10, spreadRadius: 1)]
-              : [],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 14)),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 12,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? color : AppTheme.textSecondary,
-              ),
-            ),
-          ],
-        ),
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: Divider(height: 1, color: AppTheme.borderColor),
       ),
     );
   }
@@ -254,35 +171,78 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       decoration: const BoxDecoration(
         color: AppTheme.bgCard,
-        border: Border(
-          top: BorderSide(color: AppTheme.borderColor, width: 1),
-        ),
+        border: Border(top: BorderSide(color: AppTheme.borderColor)),
       ),
-      child: BottomNavigationBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        selectedItemColor: AppTheme.epiColor,
-        unselectedItemColor: AppTheme.textMuted,
-        currentIndex: _selectedIndex,
-        onTap: (i) => setState(() => _selectedIndex = i),
-        type: BottomNavigationBarType.fixed,
-        selectedLabelStyle: GoogleFonts.spaceGrotesk(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: GoogleFonts.spaceGrotesk(fontSize: 11),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_rounded),
-            label: 'Dashboard',
+      child: NavigationBar(
+        backgroundColor: AppTheme.bgCard,
+        indicatorColor: AppTheme.epiGlow,
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() => _selectedIndex = index);
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.list_alt_rounded),
+            selectedIcon: Icon(Icons.list_alt_rounded),
+            label: 'Threats',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.analytics_rounded),
-            label: 'Analytics',
+          NavigationDestination(
+            icon: Icon(Icons.public_rounded),
+            selectedIcon: Icon(Icons.public_rounded),
+            label: 'Globe',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.account_tree_rounded),
-            label: 'Pipeline',
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({
+    required this.isLoading,
+    required this.hasError,
+  });
+
+  final bool isLoading;
+  final bool hasError;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = hasError
+        ? AppTheme.dangerRed
+        : isLoading
+            ? AppTheme.warningYellow
+            : AppTheme.successGreen;
+    final label = hasError
+        ? 'OFFLINE'
+        : isLoading
+            ? 'SYNC'
+            : 'LIVE';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.orbitron(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
           ),
         ],
       ),

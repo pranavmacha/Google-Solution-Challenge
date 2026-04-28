@@ -1,6 +1,6 @@
 # SupplySentry / GlobalSentry
 
-SupplySentry is a supply-chain risk intelligence website built for the Google Solution Challenge. It serves a live web dashboard, an India-focused RSS feed, a 3D threat globe, and an Ollama-powered agent pipeline that analyzes supply disruption headlines with local RAG memory.
+SupplySentry is a supply-chain risk intelligence platform built for the Google Solution Challenge. It serves a live web dashboard, a Flutter companion app, an India-focused RSS feed, a satellite threat map, and an agent pipeline that analyzes supply disruption headlines with local RAG memory.
 
 The current deployment is focused on **Supply-Sentry** for **SDG 12: Responsible Consumption and Production**.
 
@@ -12,7 +12,7 @@ The current deployment is focused on **Supply-Sentry** for **SDG 12: Responsible
 - Uses Qdrant local storage as RAG memory for past events.
 - Fact-checks and validates claims with DuckDuckGo search through `ddgs`.
 - Serves the website and API from one FastAPI app.
-- Includes a dashboard, pipeline/conveyor view, and 3D globe threat map.
+- Includes a dashboard, pipeline/conveyor view, website satellite map, and Flutter app with the same geotagged threat map.
 
 ## Current Architecture
 
@@ -20,13 +20,14 @@ The current deployment is focused on **Supply-Sentry** for **SDG 12: Responsible
 graph TD
     A[RSS supply feeds] --> B[FastAPI backend]
     B --> C[Web dashboard]
-    B --> D[3D globe]
+    B --> D[Website satellite map]
     B --> E[Pipeline conveyor]
-    B --> F[LangGraph agent]
-    F --> G[Ollama llama3]
-    F --> H[Qdrant local memory]
-    F --> I[DDGS validation]
-    F --> J[alerts.json / API response]
+    B --> F[Flutter app]
+    B --> G[LangGraph agent]
+    G --> H[Ollama llama3]
+    G --> I[Qdrant local memory]
+    G --> J[DDGS validation]
+    G --> K[alerts.json / API response]
 ```
 
 ## Agent Pipeline
@@ -54,7 +55,11 @@ Note: some internal code still has historical hooks for `epi` and `eco`, but the
 ├── GlobalSentry-Web/
 │   ├── api.py                  # FastAPI backend and static website server
 │   ├── requirements.txt        # Web/API dependencies
-│   └── frontend/               # Dashboard, globe, conveyor, CSS, JS
+│   └── frontend/               # Dashboard, satellite map, conveyor, CSS, JS
+├── global_sentry_app/
+│   ├── lib/                    # Flutter threat feed, satellite map, detail screens
+│   ├── pubspec.yaml            # Flutter app dependencies
+│   └── README.md               # App run instructions
 ├── Radio/
 │   ├── sentry.py               # Ollama + LangGraph + Qdrant agent
 │   ├── ingest.py               # RSS ingestion runner
@@ -71,6 +76,7 @@ Note: some internal code still has historical hooks for `epi` and `eco`, but the
 - Python 3.11+
 - Ollama installed locally or available through Docker Compose
 - `llama3` pulled in Ollama
+- Flutter SDK for the companion app
 - Docker and Docker Compose for server deployment
 
 ## Local Development
@@ -102,9 +108,23 @@ python -m uvicorn api:app --host 0.0.0.0 --port 8000
 Open:
 
 - Website: `http://localhost:8000`
-- 3D globe: `http://localhost:8000/globe.html`
+- Satellite map: `http://localhost:8000/globe.html`
 - Conveyor: `http://localhost:8000/conveyor.html`
 - API docs: `http://localhost:8000/api/docs`
+
+Run the Flutter app:
+
+```bash
+cd global_sentry_app
+flutter pub get
+flutter run --dart-define=GLOBALSENTRY_API_BASE=http://localhost:8000/api
+```
+
+For Android emulator local testing, use:
+
+```bash
+flutter run --dart-define=GLOBALSENTRY_API_BASE=http://10.0.2.2:8000/api
+```
 
 ## Test The Agent
 
@@ -134,13 +154,22 @@ If Ollama is not running, the backend may fall back to demo/RSS behavior instead
 | `GET /api/status` | Backend and active mode status. |
 | `GET /api/alerts` | Current enriched supply alerts. |
 | `GET /api/feed/supply` | Raw paginated supply RSS feed. |
-| `GET /api/globe-threats` | Threat data for the globe map. |
+| `GET /api/globe-threats` | Geotagged verified threats for the website and Flutter satellite maps. |
 | `POST /api/trigger` | Manually run one headline through the agent. |
 | `GET /api/docs` | FastAPI Swagger documentation. |
 
 ## Docker Deployment
 
-The deployment path uses Docker Compose to run:
+This branch can deploy with a hosted LLM provider instead of Ollama. For the API-key deployment path, set:
+
+```bash
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=llama-3.1-8b-instant
+EMBEDDINGS_PROVIDER=hash
+```
+
+The older Ollama deployment path uses Docker Compose to run:
 
 - `ollama`
 - `ollama-pull`, which pulls the configured model
@@ -164,9 +193,14 @@ For the full server walkthrough, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `LLM_PROVIDER` | `groq` in this branch's Docker image, `ollama` locally unless set | Chooses `groq` or `ollama`. |
+| `GROQ_API_KEY` | unset | Required when `LLM_PROVIDER=groq`. Do not commit this. |
+| `GROQ_MODEL` | `llama-3.1-8b-instant` | Groq-hosted model for the cloud branch. |
+| `EMBEDDINGS_PROVIDER` | `hash` in Docker, `sentence-transformers` locally unless set | Use `hash` on Render free tier to avoid Torch memory crashes. |
 | `OLLAMA_MODEL` | `llama3` | Ollama model used by the agent. |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` locally, `http://ollama:11434` in Docker | Ollama API URL. |
 | `QDRANT_PATH` | `./qdrant_data` locally, `/data/qdrant` in Docker | Local Qdrant persistence path. |
+| `RESET_DEMO_STATE_ON_START` | `false` | Set to `true` before a judge/demo deploy to clear `alerts.json` and Qdrant memory on startup. |
 
 ## Tech Stack
 
@@ -174,9 +208,10 @@ For the full server walkthrough, see [DEPLOYMENT.md](DEPLOYMENT.md).
 | --- | --- |
 | Backend | FastAPI, Uvicorn |
 | Frontend | HTML, CSS, JavaScript |
-| 3D map | Three.js |
+| Website map | Leaflet, Esri World Imagery, Carto labels |
+| Flutter app | Flutter, `flutter_map`, Esri World Imagery, Carto labels |
 | Agent orchestration | LangGraph, LangChain |
-| Local LLM | Ollama + Llama 3 |
+| LLM | Groq API on this branch, Ollama + Llama 3 on the local demo branch |
 | Memory | Qdrant local vector storage |
 | Embeddings | `all-MiniLM-L6-v2` |
 | Validation search | DDGS |
@@ -191,6 +226,7 @@ SupplySentry supports **SDG 12: Responsible Consumption and Production** by dete
 Current focus:
 
 - Supply-chain intelligence website
+- Flutter companion app
 - Local Ollama-powered analysis
 - Qdrant RAG memory
 - Docker deployment
