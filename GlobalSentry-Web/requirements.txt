@@ -11,4 +11,3 @@ qdrant-client
 duckduckgo-search
 ddgs
 feedparser
-sentence-transformers
