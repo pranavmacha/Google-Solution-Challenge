@@ -1,5 +1,26 @@
 # GlobalSentry Deployment
 
+This file covers the Ollama VM deployment path. On the `apiKeys` branch, you can also deploy the FastAPI website/backend with Groq instead of running Ollama.
+
+## API-Key Deployment Path
+
+Use this when deploying to Render or another normal web host where Ollama is too expensive to run.
+
+Set these environment variables on the host:
+
+```bash
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=llama-3.1-8b-instant
+QDRANT_PATH=/data/qdrant
+```
+
+Do not commit the real `GROQ_API_KEY`.
+
+For Render, create a Docker Web Service from this repo/branch and add the variables above in the Render dashboard.
+
+## Ollama VM Deployment Path
+
 This deploys the FastAPI website/backend and Ollama agent runtime together with Docker Compose.
 
 ## Server Setup

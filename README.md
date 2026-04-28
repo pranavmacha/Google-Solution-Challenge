@@ -140,7 +140,15 @@ If Ollama is not running, the backend may fall back to demo/RSS behavior instead
 
 ## Docker Deployment
 
-The deployment path uses Docker Compose to run:
+This branch can deploy with a hosted LLM provider instead of Ollama. For the API-key deployment path, set:
+
+```bash
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=llama-3.1-8b-instant
+```
+
+The older Ollama deployment path uses Docker Compose to run:
 
 - `ollama`
 - `ollama-pull`, which pulls the configured model
@@ -164,6 +172,9 @@ For the full server walkthrough, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `LLM_PROVIDER` | `groq` in this branch's Docker image, `ollama` locally unless set | Chooses `groq` or `ollama`. |
+| `GROQ_API_KEY` | unset | Required when `LLM_PROVIDER=groq`. Do not commit this. |
+| `GROQ_MODEL` | `llama-3.1-8b-instant` | Groq-hosted model for the cloud branch. |
 | `OLLAMA_MODEL` | `llama3` | Ollama model used by the agent. |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` locally, `http://ollama:11434` in Docker | Ollama API URL. |
 | `QDRANT_PATH` | `./qdrant_data` locally, `/data/qdrant` in Docker | Local Qdrant persistence path. |
@@ -176,7 +187,7 @@ For the full server walkthrough, see [DEPLOYMENT.md](DEPLOYMENT.md).
 | Frontend | HTML, CSS, JavaScript |
 | 3D map | Three.js |
 | Agent orchestration | LangGraph, LangChain |
-| Local LLM | Ollama + Llama 3 |
+| LLM | Groq API on this branch, Ollama + Llama 3 on the local demo branch |
 | Memory | Qdrant local vector storage |
 | Embeddings | `all-MiniLM-L6-v2` |
 | Validation search | DDGS |

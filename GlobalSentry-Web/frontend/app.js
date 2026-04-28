@@ -12,6 +12,7 @@ const USE_API  = true; // FastAPI serves the API from the same origin.
 const state = {
   activeMode: 'supply',
   alerts: [],
+  feedPollingEnabled: false,
 };
 
 const charts = {};
@@ -273,19 +274,72 @@ async function pollSystemStatus() {
   try {
     const resp = await fetch(`${API_BASE}/status`);
     const data = await resp.json();
-    updateAutonomousUI(data.current_analysis);
+    updateFeedPollingUI(data.feed_polling_enabled, data.feed_polling_state);
+    updateAutonomousUI(data.current_analysis, data.feed_polling_enabled);
   } catch (e) {
     console.warn('Failed to poll status', e);
   }
 }
 
-function updateAutonomousUI(currentAnalysis) {
+async function toggleFeedPolling(enabled) {
+  try {
+    const resp = await fetch(`${API_BASE}/feed-polling`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Failed to update feed intake');
+    updateFeedPollingUI(data.feed_polling_enabled, data.feed_polling_state);
+    showToast(data.feed_polling_enabled ? 'Feed intake enabled' : 'Feed intake paused', data.feed_polling_enabled ? 'success' : 'info');
+  } catch (e) {
+    console.warn('Failed to toggle feed intake', e);
+    updateFeedPollingUI(state.feedPollingEnabled, state.feedPollingEnabled ? 'running' : 'paused');
+    showToast('Could not update feed intake', 'error');
+  }
+}
+
+function updateFeedPollingUI(enabled, pollingState) {
+  const isEnabled = Boolean(enabled);
+  state.feedPollingEnabled = isEnabled;
+
+  const toggle = document.getElementById('feed-intake-toggle');
+  const stateEl = document.getElementById('feed-intake-state');
+  const statusEl = document.getElementById('status-feed-intake');
+  const liveIndicator = document.getElementById('live-indicator');
+
+  if (toggle) toggle.checked = isEnabled;
+
+  if (stateEl) {
+    stateEl.classList.toggle('running', isEnabled);
+    stateEl.classList.toggle('paused', !isEnabled);
+    stateEl.textContent = isEnabled ? 'Running - feeding agents' : 'Paused - agents ready';
+  }
+
+  if (statusEl) {
+    statusEl.classList.toggle('status-ok', isEnabled);
+    statusEl.classList.toggle('status-paused', !isEnabled);
+    statusEl.textContent = isEnabled ? '● Intake Running' : '● Intake Paused';
+  }
+
+  if (liveIndicator) {
+    liveIndicator.classList.toggle('paused', !isEnabled);
+    const label = liveIndicator.querySelector('span');
+    if (label) label.textContent = isEnabled ? 'LIVE MONITORING' : 'INTAKE PAUSED';
+  }
+}
+
+function updateAutonomousUI(currentAnalysis, feedPollingEnabled = state.feedPollingEnabled) {
   const display = document.getElementById('current-analysis-display');
   const indText = document.getElementById('active-node-text');
 
   if (!currentAnalysis) {
-    if (display) display.innerHTML = '<em>Waiting for next signal...</em>';
-    if (indText) indText.textContent = 'Idling (Waiting 20s)';
+    if (display) {
+      display.innerHTML = feedPollingEnabled
+        ? '<em>Waiting for next signal...</em>'
+        : '<em>Feed intake paused. Manual triggers still work.</em>';
+    }
+    if (indText) indText.textContent = feedPollingEnabled ? 'Idling (Waiting 20s)' : 'Paused - no RSS items entering agents';
     return;
   }
 
@@ -898,6 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
   startStatusClock();
   loadAlerts('supply');   // Load supply chain alerts immediately
   loadThreatCounts();   // Populate pillar card with real threat data
+  pollSystemStatus();
 
   // Start recurring polling
   setInterval(pollSystemStatus, 2000);

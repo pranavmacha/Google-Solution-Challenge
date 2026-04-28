@@ -2,6 +2,8 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    LLM_PROVIDER=groq \
+    GROQ_MODEL=llama-3.1-8b-instant \
     OLLAMA_BASE_URL=http://ollama:11434 \
     OLLAMA_MODEL=llama3 \
     QDRANT_PATH=/data/qdrant

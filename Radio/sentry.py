@@ -18,26 +18,66 @@ from qdrant_client.http.models import (
 )
 from dotenv import load_dotenv
 
+RADIO_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.normpath(os.path.join(RADIO_DIR, ".."))
+
 try:
-    load_dotenv(override=True)
+    load_dotenv(os.path.join(REPO_ROOT, ".env"), override=True)
+    load_dotenv(os.path.join(RADIO_DIR, ".env"), override=True)
 except UnicodeDecodeError:
     print("[Warning] Could not load .env due to encoding issue (UTF-16 BOM). Skipping.")
 
 # ─── Infrastructure ────────────────────────────────────────────────────────
 
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
 OLLAMA_MODEL   = os.getenv("OLLAMA_MODEL", "llama3")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
+def get_llm(model_name: str | None = None):
+    """Create the configured chat model.
+
+    LLM_PROVIDER=ollama keeps the local demo path.
+    LLM_PROVIDER=groq uses GROQ_API_KEY for cloud deployment.
+    """
+    provider = os.getenv("LLM_PROVIDER", LLM_PROVIDER).strip().lower()
+
+    if provider == "groq":
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError("LLM_PROVIDER=groq requires GROQ_API_KEY in the environment.")
+        try:
+            from langchain_groq import ChatGroq
+        except ImportError as exc:
+            raise RuntimeError("Install langchain-groq to use LLM_PROVIDER=groq.") from exc
+        return ChatGroq(
+            model=model_name or os.getenv("GROQ_MODEL", GROQ_MODEL),
+            api_key=api_key,
+            temperature=0,
+        )
+
+    if provider == "ollama":
+        return ChatOllama(
+            model=model_name or os.getenv("OLLAMA_MODEL", OLLAMA_MODEL),
+            base_url=os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL),
+        )
+
+    raise RuntimeError(f"Unsupported LLM_PROVIDER '{provider}'. Use 'ollama' or 'groq'.")
+
+
 # Agent A — Triage (speed matters, same model)
-triage_llm  = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+triage_llm  = get_llm(GROQ_MODEL if LLM_PROVIDER == "groq" else OLLAMA_MODEL)
 # Agent B — Analyst (depth matters)
-analyst_llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+analyst_llm = get_llm(GROQ_MODEL if LLM_PROVIDER == "groq" else OLLAMA_MODEL)
 
 # Local embeddings — no API key required
 embeddings = SentenceTransformerEmbeddings(model_name=EMBEDDING_MODEL)
 
-print(f"[GlobalSentry] Ollama model : {OLLAMA_MODEL} @ {OLLAMA_BASE_URL}")
+if LLM_PROVIDER == "groq":
+    print(f"[GlobalSentry] LLM provider : groq ({GROQ_MODEL})")
+else:
+    print(f"[GlobalSentry] LLM provider : ollama ({OLLAMA_MODEL} @ {OLLAMA_BASE_URL})")
 print(f"[GlobalSentry] Embeddings   : {EMBEDDING_MODEL}")
 
 # ─── DuckDuckGo Search ────────────────────────────────────────────────────
