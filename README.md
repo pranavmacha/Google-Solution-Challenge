@@ -211,7 +211,7 @@ For the full server walkthrough, see [DEPLOYMENT.md](DEPLOYMENT.md).
 | Website map | Leaflet, Esri World Imagery, Carto labels |
 | Flutter app | Flutter, `flutter_map`, Esri World Imagery, Carto labels |
 | Agent orchestration | LangGraph, LangChain |
-| LLM | Groq API on this branch, Ollama + Llama 3 on the local demo branch |
+| LLM | Groq Gemini API on this branch, Ollama + Llama 3 on the local demo branch |
 | Memory | Qdrant local vector storage |
 | Embeddings | `all-MiniLM-L6-v2` |
 | Validation search | DDGS |
