@@ -1,13 +1,16 @@
 # GlobalSentry App
 
-Mobile companion for the GlobalSentry web dashboard.
+Flutter companion app for the GlobalSentry web dashboard.
 
 The web dashboard runs the analysis pipeline. This Flutter app only reads the
 verified threat APIs and displays:
 
 - a verified threat feed
-- a globe-style map with geocoded threat pins
+- a satellite map with geocoded threat pins, matching the website map style
 - threat detail pages with confidence, source, location, and recommended action
+
+The map uses Esri World Imagery with Carto labels through `flutter_map`, so the
+mobile view follows the same visual language as `GlobalSentry-Web/frontend/globe.html`.
 
 ## API
 
