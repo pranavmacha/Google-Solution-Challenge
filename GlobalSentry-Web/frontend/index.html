@@ -315,9 +315,23 @@
       <div class="dashboard-sidebar">
 
         <!-- Autonomous Agent Status -->
+        <div class="sidebar-card feed-intake-card" id="feed-intake-card">
+          <div class="feed-intake-top">
+            <div>
+              <h4 class="sidebar-card-title">Feed Intake</h4>
+              <p class="sidebar-card-desc">Controls automatic RSS headlines entering the agent pipeline.</p>
+            </div>
+            <label class="feed-intake-switch" for="feed-intake-toggle" title="Toggle automatic feed-to-agent intake">
+              <input type="checkbox" id="feed-intake-toggle" onchange="toggleFeedPolling(this.checked)" />
+              <span class="feed-intake-slider"></span>
+            </label>
+          </div>
+          <div class="feed-intake-state paused" id="feed-intake-state">Paused - agents ready</div>
+        </div>
+
         <div class="sidebar-card trigger-card" id="autonomous-card">
           <h4 class="sidebar-card-title">🤖 Agent Execution</h4>
-          <p class="sidebar-card-desc">The AI is autonomously scanning RSS feeds 24/7. Currently analyzing:</p>
+          <p class="sidebar-card-desc">Agents stay online. Feed intake decides whether RSS items are sent into Ollama.</p>
           <div id="current-analysis-display" class="current-analysis-box">
             <em>Waiting for next signal...</em>
           </div>
@@ -337,7 +351,7 @@
             </div>
             <div class="status-row">
               <span class="status-label">Feed Health</span>
-              <span class="status-value status-ok">● All Feeds OK</span>
+              <span class="status-value status-paused" id="status-feed-intake">● Intake Paused</span>
             </div>
             <div class="status-row">
               <span class="status-label">Last Poll</span>

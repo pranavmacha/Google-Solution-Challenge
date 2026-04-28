@@ -398,10 +398,10 @@ def fetch_rss_alerts(mode: str) -> list:
     return unique
 
 
-def get_cached_rss(mode: str) -> list:
+def get_cached_rss(mode: str, allow_refresh: bool = True) -> list:
     """Returns cached RSS alerts, refreshing if stale."""
     now = time.time()
-    if _rss_cache["last_fetch"] is None or (now - _rss_cache["last_fetch"]) > RSS_CACHE_TTL:
+    if allow_refresh and (_rss_cache["last_fetch"] is None or (now - _rss_cache["last_fetch"]) > RSS_CACHE_TTL):
         print(f"[RSS] Refreshing supply feeds...")
         _rss_cache["supply"] = fetch_rss_alerts("supply")
         _rss_cache["last_fetch"] = now
@@ -416,7 +416,8 @@ def get_cached_rss(mode: str) -> list:
 _state = {
     "active_mode": "supply",
     "last_poll": datetime.utcnow().isoformat(),
-    "feed_health": {"supply": "OK"},
+    "feed_health": {"supply": "PAUSED"},
+    "feed_polling_enabled": False,
     "triggered_analyses": [],
     "agent_available": AGENT_AVAILABLE,
     "current_analysis": None,
@@ -430,6 +431,10 @@ _processed_headlines = set()
 class TriggerRequest(BaseModel):
     headline: str
     mode: Literal["supply"] = "supply"
+
+
+class FeedPollingRequest(BaseModel):
+    enabled: bool
 
 # ─── Live Alert Store (from agent pipeline) ───────────────────────────────────
 
@@ -751,13 +756,16 @@ def trigger_analysis(req: TriggerRequest):
 @app.get("/api/status")
 def get_status():
     """Returns system status including the current real-time analysis."""
-    rss_counts = {"supply": len(get_cached_rss("supply"))}
+    rss_counts = {"supply": len(get_cached_rss("supply", allow_refresh=False))}
     live_count = len(load_live_alerts())
+    feed_polling_enabled = _state["feed_polling_enabled"]
 
     return {
         "active_mode": _state["active_mode"],
         "last_poll": _state["last_poll"],
         "feed_health": _state["feed_health"],
+        "feed_polling_enabled": feed_polling_enabled,
+        "feed_polling_state": "running" if feed_polling_enabled else "paused",
         "agent_available": AGENT_AVAILABLE,
         "rss_headlines": rss_counts,
         "agent_processed_alerts": live_count,
@@ -767,8 +775,27 @@ def get_status():
             "profiler", "triage", "retriever", "analyst", "locator",
             "correlator", "validator", "retry", "notify", "archiver"
         ],
-        "data_source": "Live Indian RSS feeds -> Autonomous AI",
+        "data_source": "Live Indian RSS feeds -> Autonomous AI" if feed_polling_enabled else "Feed intake paused; manual agent trigger available",
         "version": "3.0.0",
+    }
+
+
+@app.put("/api/feed-polling")
+def set_feed_polling(req: FeedPollingRequest):
+    """Enable or pause automatic RSS-to-agent intake without stopping the agent."""
+    _state["feed_polling_enabled"] = req.enabled
+    _state["feed_health"]["supply"] = "OK" if req.enabled else "PAUSED"
+    if not req.enabled:
+        _state["current_analysis"] = None
+    return {
+        "feed_polling_enabled": _state["feed_polling_enabled"],
+        "feed_polling_state": "running" if req.enabled else "paused",
+        "changed_at": datetime.utcnow().isoformat(),
+        "message": (
+            "Automatic feed intake is running. RSS headlines can enter the agent pipeline."
+            if req.enabled
+            else "Automatic feed intake is paused. Agents remain available for manual triggers."
+        ),
     }
 
 
@@ -852,6 +879,14 @@ async def autonomous_agent_loop():
         
     while True:
         try:
+            if not _state["feed_polling_enabled"]:
+                _state["feed_health"]["supply"] = "PAUSED"
+                _state["current_analysis"] = None
+                await asyncio.sleep(2)
+                continue
+
+            _state["feed_health"]["supply"] = "OK"
+
             # Build queue of unprocessed supply chain headlines
             headlines = get_cached_rss("supply")
             headlines = _prioritize_headlines(headlines)
